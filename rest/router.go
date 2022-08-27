@@ -3,6 +3,7 @@ package rest
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -102,6 +103,31 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 		writer.Write(jsonEncoded)
 
 	}).Methods("GET")
+
+	apiv0.HandleFunc("/devices/{deviceID}/capabilities/{capabilityID}", func(writer http.ResponseWriter, reader *http.Request) {
+		vars := mux.Vars(reader)
+		deviceID := vars["deviceID"]
+		capabilityID := vars["capabilityID"]
+		capArg := devicestoretemplates.CapabilityArgs{}
+		err := json.NewDecoder(reader.Body).Decode(&capArg)
+		if err != nil {
+			if err == io.EOF {
+				capArg = devicestoretemplates.CapabilityArgs{}
+
+			} else {
+				ServeHTTPError(database.UserError(err), writer)
+				return
+			}
+
+		}
+		logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%s'", capabilityID, deviceID))
+		err = persistence.TriggerCapability(deviceID, capabilityID, capArg)
+		if err != nil {
+			ServeHTTPError(err, writer)
+			return
+		}
+
+	}).Methods("POST")
 
 	apiv0.HandleFunc("/bridges", func(writer http.ResponseWriter, reader *http.Request) {
 		apiBridge := devicestoretemplates.Bridge{}

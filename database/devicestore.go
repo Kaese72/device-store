@@ -17,6 +17,7 @@ type DevicePersistenceDB interface {
 	//// Capabilities
 	UpdateDeviceAttributesAndCapabilities(devicestoretemplates.Device, devicestoretemplates.BridgeKey) (devicestoretemplates.Device, error)
 	GetCapability(deviceId string, capName string) (models.CapabilityIntermediary, error)
+	TriggerCapability(deviceId string, capName string, capArgs devicestoretemplates.CapabilityArgs) error
 
 	// Bridge Control
 	EnrollBridge(bridge devicestoretemplates.Bridge) (devicestoretemplates.Bridge, error)

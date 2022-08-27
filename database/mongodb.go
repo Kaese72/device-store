@@ -1,8 +1,12 @@
 package database
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/Kaese72/device-store/config"
@@ -157,7 +161,7 @@ func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capNa
 	logging.Info("Fetching capability", map[string]string{"deviceId": deviceId, "capabilityName": capName})
 	capHandle := persistence.getDeviceCapabilityCollection()
 	rCapabilities := []models.MongoDeviceCapability{}
-	cursor, err := capHandle.Find(context.TODO(), bson.D{primitive.E{Key: "deviceId", Value: deviceId}, primitive.E{Key: "capabilityName", Value: capName}})
+	cursor, err := capHandle.Find(context.TODO(), bson.D{primitive.E{Key: "deviceId", Value: deviceId}, primitive.E{Key: "capabilityName", Value: capName}}, options.Find().SetLimit(1), options.Find().SetSort(bson.D{{Key: "lastSeen", Value: -1}}))
 	if err != nil {
 		logging.Info(err.Error())
 		return intermediary.CapabilityIntermediary{}, UnknownError(err)
@@ -167,9 +171,38 @@ func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capNa
 		logging.Info(err.Error())
 		return intermediary.CapabilityIntermediary{}, UnknownError(err)
 	}
-	// FIXME Determine if todo
-	// FIXME Error handling
-	// FIXME verify upserts
+	if len(rCapabilities) != 1 {
+		return intermediary.CapabilityIntermediary{}, NotFound(err)
+	}
+	return intermediary.CapabilityIntermediary{
+		DeviceId:            rCapabilities[0].DeviceId,
+		CapabilityName:      rCapabilities[0].CapabilityName,
+		CapabilityBridgeKey: rCapabilities[0].CapabilityBridgeKey,
+		CapabilityBridgeURI: rCapabilities[0].CapabilityBridgeURI,
+		LastSeen:            rCapabilities[0].LastSeen,
+	}, nil
+}
+
+func (persistence MongoDBDevicePersistence) TriggerCapability(deviceId string, capName string, capArgs devicestoretemplates.CapabilityArgs) error {
+	cap, err := persistence.GetCapability(deviceId, capName)
+	if err != nil {
+		return err
+	}
+	jsonEncoded, err := json.Marshal(capArgs)
+	if err != nil {
+		return err
+	}
+	capUri := fmt.Sprintf("%s/devices/%s/capabilities/%s", cap.CapabilityBridgeURI, deviceId, capName)
+	resp, err := http.Post(capUri, "application/json", bytes.NewBuffer(jsonEncoded))
+	if err != nil {
+		// FIXME What if there is interesting debug information in the response?
+		// We should log it or incorporate it in the response message or something
+		return err
+	}
+	// It is the callers responsibility to Close the body reader
+	// But there should not be anything of interest here at the moment
+	defer resp.Body.Close()
+	return nil
 }
 
 func (persistence MongoDBDevicePersistence) EnrollBridge(apiBridge devicestoretemplates.Bridge) (devicestoretemplates.Bridge, error) {
