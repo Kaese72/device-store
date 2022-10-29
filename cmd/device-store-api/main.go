@@ -3,67 +3,50 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
+	"strings"
 
 	"github.com/Kaese72/device-store/config"
 	"github.com/Kaese72/device-store/database"
 	"github.com/Kaese72/device-store/rest"
 	"github.com/Kaese72/sdup-lib/logging"
+	"github.com/spf13/viper"
 )
 
-type Config struct {
-	Database   config.DatabaseConfig `json:"database"`
-	HTTPConfig config.HTTPConfig     `json:"http-server"`
-}
-
-func (conf *Config) PopulateExample() {
-	conf.Database = config.DatabaseConfig{
-		MongoDB: &config.MongoDBConfig{
-			ConnectionString: "localhost:27017",
-		},
-	}
-	conf.HTTPConfig = config.HTTPConfig{
-		Address: "localhost",
-		Port:    8080,
-	}
-}
-
-func (conf Config) Validate() error {
-	if err := conf.Database.Validate(); err != nil {
-		return err
-	}
-	if err := conf.HTTPConfig.Validate(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func ReadConfig() (Config, error) {
-	conf := Config{}
-	if _, err := os.Stat("./settings.json"); err == nil {
-		file, err := os.Open("./settings.json")
-		if err != nil {
-			logging.Error(fmt.Sprintf("Unable to open local settings file, %s", err.Error()))
-			return conf, err
-		}
-		if err := json.NewDecoder(file).Decode(&conf); err != nil {
-			logging.Error(err.Error())
-			return conf, err
-		}
-
-	} else {
-		if err := json.NewDecoder(os.Stdin).Decode(&conf); err != nil {
-			logging.Error(err.Error())
-			return conf, err
-		}
-	}
-
-	return conf, nil
-}
-
 func main() {
-	conf, err := ReadConfig()
+	// # Viper configuration
+	myVip := viper.New()
+	// We have elected to no use AutomaticEnv() because of https://github.com/spf13/viper/issues/584
+	// myVip.AutomaticEnv()
+	// Set replaces to allow keys like "database.mongodb.connection-string"
+	myVip.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+
+	// # Configuration file configuration
+	myVip.SetConfigName("config")
+	myVip.AddConfigPath(".")
+	myVip.AddConfigPath("99_local")
+	myVip.AddConfigPath("/etc/device-store-api/")
+	if err := myVip.ReadInConfig(); err != nil {
+		logging.Error(err.Error())
+	}
+
+	// # Default values where appropriate
+	// API configuration
+	myVip.BindEnv("http-server.address")
+	myVip.SetDefault("http-server.address", "0.0.0.0")
+
+	myVip.BindEnv("http-server.port")
+	myVip.SetDefault("http-server.port", 8080)
+	// # Database configuration
+	myVip.BindEnv("database.mongodb.connection-string")
+
+	var conf config.Config
+	err := myVip.Unmarshal(&conf)
 	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	if err := myVip.WriteConfigAs("./config.used.yaml"); err != nil {
 		logging.Error(err.Error())
 		return
 	}

@@ -5,7 +5,7 @@ import (
 )
 
 type MongoDBConfig struct {
-	ConnectionString string `json:"connection-string"`
+	ConnectionString string `json:"connection-string" mapstructure:"connection-string"`
 }
 
 func (conf MongoDBConfig) Validate() error {
@@ -16,7 +16,7 @@ func (conf MongoDBConfig) Validate() error {
 }
 
 type DatabaseConfig struct {
-	MongoDB *MongoDBConfig `json:"mongodb"`
+	MongoDB *MongoDBConfig `json:"mongodb" mapstructure:"mongodb"`
 }
 
 func (conf DatabaseConfig) Validate() error {
@@ -28,8 +28,8 @@ func (conf DatabaseConfig) Validate() error {
 }
 
 type HTTPConfig struct {
-	Address string `json:"address"`
-	Port    int    `json:"port"`
+	Address string `json:"address" mapstructure:"address"`
+	Port    int    `json:"port" mapstructure:"port"`
 }
 
 func (conf HTTPConfig) Validate() error {
@@ -39,6 +39,33 @@ func (conf HTTPConfig) Validate() error {
 
 	if conf.Port == 0 {
 		return errors.New("need to supply a http listen port")
+	}
+	return nil
+}
+
+type Config struct {
+	Database   DatabaseConfig `json:"database" mapstructure:"database"`
+	HTTPConfig HTTPConfig     `json:"http-server" mapstructure:"http-server"`
+}
+
+func (conf *Config) PopulateExample() {
+	conf.Database = DatabaseConfig{
+		MongoDB: &MongoDBConfig{
+			ConnectionString: "localhost:27017",
+		},
+	}
+	conf.HTTPConfig = HTTPConfig{
+		Address: "localhost",
+		Port:    8080,
+	}
+}
+
+func (conf Config) Validate() error {
+	if err := conf.Database.Validate(); err != nil {
+		return err
+	}
+	if err := conf.HTTPConfig.Validate(); err != nil {
+		return err
 	}
 	return nil
 }
