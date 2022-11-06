@@ -17,7 +17,7 @@ type Config struct {
 
 func (conf *Config) PopulateExample() {
 	conf.Database = config.DatabaseConfig{
-		MongoDB: &config.MongoDBConfig{
+		MongoDB: config.MongoDBConfig{
 			ConnectionString: "localhost:27017",
 		},
 	}
