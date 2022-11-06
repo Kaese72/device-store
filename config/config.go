@@ -6,6 +6,7 @@ import (
 
 type MongoDBConfig struct {
 	ConnectionString string `json:"connection-string" mapstructure:"connection-string"`
+	DbName           string `json:"db-name" mapstructure:"db-name"`
 }
 
 func (conf MongoDBConfig) Validate() error {
@@ -16,15 +17,15 @@ func (conf MongoDBConfig) Validate() error {
 }
 
 type DatabaseConfig struct {
-	MongoDB *MongoDBConfig `json:"mongodb" mapstructure:"mongodb"`
+	MongoDB MongoDBConfig `json:"mongodb" mapstructure:"mongodb"`
 }
 
 func (conf DatabaseConfig) Validate() error {
-	if conf.MongoDB == nil {
-		return errors.New("need to supply at least one database backend")
+	if conf.MongoDB.Validate() == nil {
+		// MongoDB validation passed, indicating that there is at least one valid config
+		return nil
 	}
-
-	return nil
+	return errors.New("need to supply at least one database backend")
 }
 
 type HTTPConfig struct {

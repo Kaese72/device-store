@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"path"
 	"strconv"
 
 	"github.com/Kaese72/device-store/config"
@@ -15,7 +17,6 @@ import (
 	"github.com/Kaese72/sdup-lib/devicestoretemplates"
 	"github.com/Kaese72/sdup-lib/logging"
 	"github.com/Kaese72/sdup-lib/sduptemplates"
-	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -24,21 +25,22 @@ import (
 
 type MongoDBDevicePersistence struct {
 	mongoClient *mongo.Client
+	dbName      string
 }
 
 func (persistence MongoDBDevicePersistence) getDeviceAttributeCollection() *mongo.Collection {
 	// TODO Make configurable, at least the database name
-	return persistence.mongoClient.Database("huemie").Collection("deviceAttributes")
+	return persistence.mongoClient.Database(persistence.dbName).Collection("deviceAttributes")
 }
 
 func (persistence MongoDBDevicePersistence) getDeviceCapabilityCollection() *mongo.Collection {
 	// TODO Make configurable, at least the database name
-	return persistence.mongoClient.Database("huemie").Collection("deviceCapabilities")
+	return persistence.mongoClient.Database(persistence.dbName).Collection("deviceCapabilities")
 }
 
 func (persistence MongoDBDevicePersistence) getBridgeCollection() *mongo.Collection {
 	// TODO Make configurable, at least the database name
-	return persistence.mongoClient.Database("huemie").Collection("bridges")
+	return persistence.mongoClient.Database(persistence.dbName).Collection("bridges")
 }
 
 func (persistence MongoDBDevicePersistence) FilterDevices() ([]devicestoretemplates.Device, error) {
@@ -140,8 +142,22 @@ func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilitie
 	}
 	bridgeHandle := persistence.getBridgeCollection()
 	relevantBridge := models.Bridge{}
+	bridgeURL, err := url.Parse(string(sourceBridge))
+	if err != nil {
+		logging.Info(err.Error())
+		return devicestoretemplates.Device{}, UserError(errors.New("could not parse bridge key as URL"))
+	}
 	err = bridgeHandle.FindOne(context.TODO(), bson.D{primitive.E{Key: "identifier", Value: sourceBridge}}).Decode(&relevantBridge)
 	if err != nil {
+		logging.Info("Bridge posted invalid bridge key", map[string]string{"key": string(sourceBridge)})
+		return devicestoretemplates.Device{}, UserError(errors.New("could not parse bridge key as URL"))
+	}
+	if err != nil {
+		persistence.enrollBridge(devicestoretemplates.Bridge{
+			Identifier: sourceBridge,
+			// FIXME if sourcebridge has the wring format, we're screwed
+			URI: bridgeURL.String(),
+		})
 		logging.Info(err.Error())
 		return devicestoretemplates.Device{}, UnknownError(err)
 	}
@@ -192,23 +208,30 @@ func (persistence MongoDBDevicePersistence) TriggerCapability(deviceId string, c
 	if err != nil {
 		return err
 	}
-	capUri := fmt.Sprintf("%s/devices/%s/capabilities/%s", cap.CapabilityBridgeURI, deviceId, capName)
-	resp, err := http.Post(capUri, "application/json", bytes.NewBuffer(jsonEncoded))
+
+	bridgeURL, err := url.Parse(cap.CapabilityBridgeURI)
+	if err != nil {
+		return err
+	}
+	bridgeURL.Path = path.Join(bridgeURL.Path, fmt.Sprintf("devices/%s/capabilities/%s", deviceId, capName))
+	logging.Info("Triggering capability", map[string]string{"capUri": bridgeURL.String()})
+	resp, err := http.Post(bridgeURL.String(), "application/json", bytes.NewBuffer(jsonEncoded))
 	if err != nil {
 		// FIXME What if there is interesting debug information in the response?
 		// We should log it or incorporate it in the response message or something
 		return err
 	}
+	logging.Info("Capability triggered", map[string]string{"rCode": strconv.Itoa(resp.StatusCode)})
 	// It is the callers responsibility to Close the body reader
 	// But there should not be anything of interest here at the moment
 	defer resp.Body.Close()
 	return nil
 }
 
-func (persistence MongoDBDevicePersistence) EnrollBridge(apiBridge devicestoretemplates.Bridge) (devicestoretemplates.Bridge, error) {
+func (persistence MongoDBDevicePersistence) enrollBridge(apiBridge devicestoretemplates.Bridge) (devicestoretemplates.Bridge, error) {
 	if len(apiBridge.Identifier) == 0 {
 		// FIXME Allow allocation of bridge key
-		apiBridge.Identifier = devicestoretemplates.BridgeKey(uuid.New().String())
+		return devicestoretemplates.Bridge{}, errors.New("bridge identifier may not be empty")
 	}
 	if len(apiBridge.URI) == 0 {
 		// FIXME Validate URI
@@ -287,5 +310,6 @@ func NewMongoDBDevicePersistence(conf config.MongoDBConfig) (DevicePersistenceDB
 
 	return MongoDBDevicePersistence{
 		mongoClient: mongoClient,
+		dbName:      conf.DbName,
 	}, nil
 }

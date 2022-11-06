@@ -20,7 +20,6 @@ type DevicePersistenceDB interface {
 	TriggerCapability(deviceId string, capName string, capArgs devicestoretemplates.CapabilityArgs) error
 
 	// Bridge Control
-	EnrollBridge(bridge devicestoretemplates.Bridge) (devicestoretemplates.Bridge, error)
 	ForgetBridge(bridgeKey devicestoretemplates.BridgeKey) error
 	ListBridges() (bridge []devicestoretemplates.Bridge, err error)
 }
@@ -30,8 +29,8 @@ type UnknownError error
 type UserError error
 
 func NewDevicePersistenceDB(conf config.DatabaseConfig) (DevicePersistenceDB, error) {
-	if conf.MongoDB != nil {
-		return NewMongoDBDevicePersistence(*conf.MongoDB)
+	if conf.MongoDB.Validate() == nil {
+		return NewMongoDBDevicePersistence(conf.MongoDB)
 
 	} else {
 		return nil, errors.New("no applicable database backend provided")

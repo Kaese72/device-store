@@ -36,8 +36,10 @@ func main() {
 
 	myVip.BindEnv("http-server.port")
 	myVip.SetDefault("http-server.port", 8080)
-	// # Database configuration
+	// # Database configuration, if left out, assume no mongo configuration
 	myVip.BindEnv("database.mongodb.connection-string")
+	myVip.BindEnv("database.mongodb.db-name")
+	myVip.SetDefault("database.mongodb.db-name", "huemie")
 
 	var conf config.Config
 	err := myVip.Unmarshal(&conf)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/Kaese72/device-store/config"
 	"github.com/Kaese72/device-store/database"
@@ -126,48 +125,6 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 			ServeHTTPError(err, writer)
 			return
 		}
-
-	}).Methods("POST")
-
-	apiv0.HandleFunc("/bridges", func(writer http.ResponseWriter, reader *http.Request) {
-		apiBridge := devicestoretemplates.Bridge{}
-		err := json.NewDecoder(reader.Body).Decode(&apiBridge)
-		if err != nil {
-			logging.Info("Failed to decode request body", map[string]string{"error": err.Error()})
-			http.Error(writer, err.Error(), http.StatusBadRequest)
-			return
-		}
-		for i := 0; ; i++ {
-			logging.Info(fmt.Sprintf("Attempt %d at enrolling bridge", i))
-			err = apiBridge.HealthCheck()
-			if err != nil {
-				if i > 4 {
-					logging.Info(fmt.Sprintf("Attempt %d failed, threshold surpassed", i))
-					http.Error(writer, err.Error(), http.StatusBadRequest)
-					return
-				}
-				logging.Info(fmt.Sprintf("Attempt %d failed, retry in 5 seconds", i))
-				time.Sleep(5000000000)
-			} else {
-				logging.Info("HealthCheck on enrolled bridge passed")
-				break
-			}
-		}
-
-		apiBridge, err = persistence.EnrollBridge(apiBridge)
-		if err != nil {
-			logging.Error("Failed enroll bridge", map[string]string{"error": err.Error()})
-			http.Error(writer, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		jsonEncoded, err := json.MarshalIndent(apiBridge, "", "   ")
-		if err != nil {
-			logging.Info("Failed to marsha response", map[string]string{"error": err.Error()})
-			ServeHTTPError(err, writer)
-			return
-		}
-
-		writer.Write(jsonEncoded)
 
 	}).Methods("POST")
 
