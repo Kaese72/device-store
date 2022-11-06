@@ -144,22 +144,20 @@ func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilitie
 	relevantBridge := models.Bridge{}
 	bridgeURL, err := url.Parse(string(sourceBridge))
 	if err != nil {
-		logging.Info(err.Error())
+		logging.Info("Bridge posted invalid bridge key", map[string]string{"key": string(sourceBridge)})
 		return devicestoretemplates.Device{}, UserError(errors.New("could not parse bridge key as URL"))
 	}
 	err = bridgeHandle.FindOne(context.TODO(), bson.D{primitive.E{Key: "identifier", Value: sourceBridge}}).Decode(&relevantBridge)
 	if err != nil {
-		logging.Info("Bridge posted invalid bridge key", map[string]string{"key": string(sourceBridge)})
-		return devicestoretemplates.Device{}, UserError(errors.New("could not parse bridge key as URL"))
-	}
-	if err != nil {
-		persistence.enrollBridge(devicestoretemplates.Bridge{
+		relevantBridge, err = persistence.enrollBridge(models.Bridge{
 			Identifier: sourceBridge,
-			// FIXME if sourcebridge has the wring format, we're screwed
+			// FIXME if sourcebridge has the wrong format, just fail or something
 			URI: bridgeURL.String(),
 		})
-		logging.Info(err.Error())
-		return devicestoretemplates.Device{}, UnknownError(err)
+		if err != nil {
+			return devicestoretemplates.Device{}, UnknownError(err)
+		}
+
 	}
 	mongoCapabilities := models.ExtractCapabilityModelsFromAPIDeviceModel(apiDevice, relevantBridge)
 	capHandle := persistence.getDeviceCapabilityCollection()
@@ -228,18 +226,14 @@ func (persistence MongoDBDevicePersistence) TriggerCapability(deviceId string, c
 	return nil
 }
 
-func (persistence MongoDBDevicePersistence) enrollBridge(apiBridge devicestoretemplates.Bridge) (devicestoretemplates.Bridge, error) {
+func (persistence MongoDBDevicePersistence) enrollBridge(apiBridge models.Bridge) (models.Bridge, error) {
 	if len(apiBridge.Identifier) == 0 {
 		// FIXME Allow allocation of bridge key
-		return devicestoretemplates.Bridge{}, errors.New("bridge identifier may not be empty")
+		return models.Bridge{}, errors.New("bridge identifier may not be empty")
 	}
 	if len(apiBridge.URI) == 0 {
 		// FIXME Validate URI
-		return devicestoretemplates.Bridge{}, errors.New("URI may not be empty")
-	}
-	// FIXME Run healthcheck multiple times
-	if err := apiBridge.HealthCheck(); err != nil {
-		return devicestoretemplates.Bridge{}, errors.New("health check failed")
+		return models.Bridge{}, errors.New("URI may not be empty")
 	}
 	dbBridge := models.Bridge{
 		Identifier: apiBridge.Identifier,
@@ -248,13 +242,13 @@ func (persistence MongoDBDevicePersistence) enrollBridge(apiBridge devicestorete
 	handle := persistence.getBridgeCollection()
 	updateResults, err := handle.UpdateOne(context.TODO(), bson.D{primitive.E{Key: "identifier", Value: dbBridge.Identifier}}, bson.M{"$setOnInsert": dbBridge}, options.Update().SetUpsert(true))
 	if err != nil {
-		return devicestoretemplates.Bridge{}, err
+		return models.Bridge{}, err
 	}
 	if updateResults.UpsertedCount == 0 {
-		return devicestoretemplates.Bridge{}, errors.New("bridge Identifier already exists")
+		return models.Bridge{}, errors.New("bridge Identifier already exists")
 	}
 
-	return devicestoretemplates.Bridge{
+	return models.Bridge{
 		Identifier: dbBridge.Identifier,
 		URI:        dbBridge.URI,
 	}, nil
