@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Kaese72/device-store/adapterattendant"
 	"github.com/Kaese72/device-store/config"
 	"github.com/Kaese72/device-store/database"
 	"github.com/Kaese72/device-store/rest"
@@ -41,6 +42,9 @@ func main() {
 	myVip.BindEnv("database.mongodb.db-name")
 	myVip.SetDefault("database.mongodb.db-name", "huemie")
 
+	// # Device attendant
+	myVip.BindEnv("adapter-attendant.url")
+
 	var conf config.Config
 	err := myVip.Unmarshal(&conf)
 	if err != nil {
@@ -70,6 +74,7 @@ func main() {
 		logging.Error(err.Error())
 		return
 	}
+	adapterAttendant := adapterattendant.NewAdapterAttendant(conf.AdapterAttendant)
 	logging.Info("Successfully contacted database")
-	rest.PersistenceAPIListenAndServe(conf.HTTPConfig, persistence)
+	rest.PersistenceAPIListenAndServe(conf.HTTPConfig, persistence, adapterAttendant)
 }

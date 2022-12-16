@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/Kaese72/device-store/adapterattendant"
 	"github.com/Kaese72/device-store/config"
 	"github.com/Kaese72/device-store/database"
 	"github.com/Kaese72/sdup-lib/devicestoretemplates"
@@ -24,7 +25,7 @@ func ServeHTTPError(err error, writer http.ResponseWriter) {
 	}
 }
 
-func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database.DevicePersistenceDB) error {
+func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database.DevicePersistenceDB, attendant adapterattendant.Attendant) error {
 	router := mux.NewRouter()
 
 	//Everything else (not /auth/login) should have the authentication middleware
@@ -49,7 +50,7 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 	apiv0.HandleFunc("/devices", func(writer http.ResponseWriter, reader *http.Request) {
 		bridgeKey := reader.Header.Get("Bridge-Key")
 		device := devicestoretemplates.Device{}
-		rDevice := devicestoretemplates.Device{}
+		var rDevice devicestoretemplates.Device
 		err := json.NewDecoder(reader.Body).Decode(&device)
 		if err != nil {
 			http.Error(writer, err.Error(), http.StatusBadRequest)
@@ -57,7 +58,12 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 		}
 		if len(device.Capabilities) > 0 {
 			if bridgeKey == "" {
-				http.Error(writer, "May not set capabilities when not identifying as a bridge", http.StatusBadRequest)
+				http.Error(writer, "May not set capabilities when not identifying as an adapter", http.StatusBadRequest)
+				return
+			}
+			_, err := attendant.GetAdapter(bridgeKey)
+			if err != nil {
+				http.Error(writer, fmt.Sprintf("Could not get adapter, '%s'", err.Error()), http.StatusBadRequest)
 				return
 			}
 			rDevice, err = persistence.UpdateDeviceAttributesAndCapabilities(device, devicestoretemplates.BridgeKey(bridgeKey))
@@ -127,35 +133,6 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 		}
 
 	}).Methods("POST")
-
-	apiv0.HandleFunc("/bridges", func(writer http.ResponseWriter, reader *http.Request) {
-		APIBridges, err := persistence.ListBridges()
-		if err != nil {
-			logging.Info("Failed to list bridges", map[string]string{"error": err.Error()})
-			ServeHTTPError(err, writer)
-			return
-		}
-		jsonEncoded, err := json.MarshalIndent(APIBridges, "", "   ")
-		if err != nil {
-			logging.Info("Failed to marshal response", map[string]string{"error": err.Error()})
-			ServeHTTPError(err, writer)
-			return
-		}
-
-		writer.Write(jsonEncoded)
-
-	}).Methods("GET")
-
-	apiv0.HandleFunc("/bridges/{bridgeId}", func(writer http.ResponseWriter, reader *http.Request) {
-		vars := mux.Vars(reader)
-		deviceId := vars["bridgeId"]
-		err := persistence.ForgetBridge(devicestoretemplates.BridgeKey(deviceId))
-		if err != nil {
-			http.Error(writer, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-	}).Methods("DELETE")
 
 	server := &http.Server{
 		Handler: router,

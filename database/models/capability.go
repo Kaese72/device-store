@@ -11,7 +11,6 @@ type MongoDeviceCapability struct {
 	DeviceId            string                         `bson:"deviceId"`
 	CapabilityName      string                         `bson:"capabilityName"`
 	CapabilityBridgeKey devicestoretemplates.BridgeKey `bson:"capabilityBridgeKey"`
-	CapabilityBridgeURI string                         `bson:"bridgeURI"`
 	LastSeen            time.Time                      `bson:"lastSeen"`
 }
 
@@ -27,7 +26,6 @@ func (capability MongoDeviceCapability) ConvertToUpdate() bson.M {
 			"deviceId":            capability.DeviceId,
 			"capabilityName":      capability.CapabilityName,
 			"capabilityBridgeKey": string(capability.CapabilityBridgeKey),
-			"bridgeURI":           capability.CapabilityBridgeURI,
 		},
 		"$currentDate": bson.M{
 			"lastSeen": bson.M{"$type": "timestamp"},
@@ -35,14 +33,13 @@ func (capability MongoDeviceCapability) ConvertToUpdate() bson.M {
 	}
 }
 
-func ExtractCapabilityModelsFromAPIDeviceModel(device devicestoretemplates.Device, bridge Bridge) []MongoDeviceCapability {
+func ExtractCapabilityModelsFromAPIDeviceModel(device devicestoretemplates.Device, bridgeKey devicestoretemplates.BridgeKey) []MongoDeviceCapability {
 	capabilities := []MongoDeviceCapability{}
 	for capabilityKey := range device.Capabilities {
 		capabilities = append(capabilities, MongoDeviceCapability{
 			DeviceId:            device.Identifier,
 			CapabilityName:      string(capabilityKey),
-			CapabilityBridgeKey: devicestoretemplates.BridgeKey(bridge.Identifier),
-			CapabilityBridgeURI: bridge.URI,
+			CapabilityBridgeKey: bridgeKey,
 		})
 	}
 	return capabilities

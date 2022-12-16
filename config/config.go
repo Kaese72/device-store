@@ -44,9 +44,21 @@ func (conf HTTPConfig) Validate() error {
 	return nil
 }
 
+type AdapterAttendantConfig struct {
+	URL string `json:"url" mapstructure:"url"`
+}
+
+func (conf AdapterAttendantConfig) Validate() error {
+	if conf.URL == "" {
+		return errors.New("must supply adapter base URL")
+	}
+	return nil
+}
+
 type Config struct {
-	Database   DatabaseConfig `json:"database" mapstructure:"database"`
-	HTTPConfig HTTPConfig     `json:"http-server" mapstructure:"http-server"`
+	Database         DatabaseConfig         `json:"database" mapstructure:"database"`
+	HTTPConfig       HTTPConfig             `json:"http-server" mapstructure:"http-server"`
+	AdapterAttendant AdapterAttendantConfig `json:"adapter-attendant"`
 }
 
 func (conf *Config) PopulateExample() {
@@ -59,6 +71,9 @@ func (conf *Config) PopulateExample() {
 		Address: "localhost",
 		Port:    8080,
 	}
+	conf.AdapterAttendant = AdapterAttendantConfig{
+		URL: "http://somehost:8080/rest/v0",
+	}
 }
 
 func (conf Config) Validate() error {
@@ -66,6 +81,9 @@ func (conf Config) Validate() error {
 		return err
 	}
 	if err := conf.HTTPConfig.Validate(); err != nil {
+		return err
+	}
+	if err := conf.AdapterAttendant.Validate(); err != nil {
 		return err
 	}
 	return nil

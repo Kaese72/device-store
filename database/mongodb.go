@@ -38,11 +38,6 @@ func (persistence MongoDBDevicePersistence) getDeviceCapabilityCollection() *mon
 	return persistence.mongoClient.Database(persistence.dbName).Collection("deviceCapabilities")
 }
 
-func (persistence MongoDBDevicePersistence) getBridgeCollection() *mongo.Collection {
-	// TODO Make configurable, at least the database name
-	return persistence.mongoClient.Database(persistence.dbName).Collection("bridges")
-}
-
 func (persistence MongoDBDevicePersistence) FilterDevices() ([]devicestoretemplates.Device, error) {
 	// FIXME Implement capability modification
 	attrHandle := persistence.getDeviceAttributeCollection()
@@ -140,26 +135,7 @@ func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilitie
 		logging.Info(err.Error())
 		return devicestoretemplates.Device{}, UnknownError(err)
 	}
-	bridgeHandle := persistence.getBridgeCollection()
-	relevantBridge := models.Bridge{}
-	bridgeURL, err := url.Parse(string(sourceBridge))
-	if err != nil {
-		logging.Info("Bridge posted invalid bridge key", map[string]string{"key": string(sourceBridge)})
-		return devicestoretemplates.Device{}, UserError(errors.New("could not parse bridge key as URL"))
-	}
-	err = bridgeHandle.FindOne(context.TODO(), bson.D{primitive.E{Key: "identifier", Value: sourceBridge}}).Decode(&relevantBridge)
-	if err != nil {
-		relevantBridge, err = persistence.enrollBridge(models.Bridge{
-			Identifier: sourceBridge,
-			// FIXME if sourcebridge has the wrong format, just fail or something
-			URI: bridgeURL.String(),
-		})
-		if err != nil {
-			return devicestoretemplates.Device{}, UnknownError(err)
-		}
-
-	}
-	mongoCapabilities := models.ExtractCapabilityModelsFromAPIDeviceModel(apiDevice, relevantBridge)
+	mongoCapabilities := models.ExtractCapabilityModelsFromAPIDeviceModel(apiDevice, sourceBridge)
 	capHandle := persistence.getDeviceCapabilityCollection()
 	for _, capability := range mongoCapabilities {
 		logging.Info("Updating attribute", map[string]string{"deviceId": capability.DeviceId, "capabilityName": capability.CapabilityName})
@@ -192,7 +168,6 @@ func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capNa
 		DeviceId:            rCapabilities[0].DeviceId,
 		CapabilityName:      rCapabilities[0].CapabilityName,
 		CapabilityBridgeKey: rCapabilities[0].CapabilityBridgeKey,
-		CapabilityBridgeURI: rCapabilities[0].CapabilityBridgeURI,
 		LastSeen:            rCapabilities[0].LastSeen,
 	}, nil
 }
@@ -224,70 +199,6 @@ func (persistence MongoDBDevicePersistence) TriggerCapability(deviceId string, c
 	// But there should not be anything of interest here at the moment
 	defer resp.Body.Close()
 	return nil
-}
-
-func (persistence MongoDBDevicePersistence) enrollBridge(apiBridge models.Bridge) (models.Bridge, error) {
-	if len(apiBridge.Identifier) == 0 {
-		// FIXME Allow allocation of bridge key
-		return models.Bridge{}, errors.New("bridge identifier may not be empty")
-	}
-	if len(apiBridge.URI) == 0 {
-		// FIXME Validate URI
-		return models.Bridge{}, errors.New("URI may not be empty")
-	}
-	dbBridge := models.Bridge{
-		Identifier: apiBridge.Identifier,
-		URI:        apiBridge.URI,
-	}
-	handle := persistence.getBridgeCollection()
-	updateResults, err := handle.UpdateOne(context.TODO(), bson.D{primitive.E{Key: "identifier", Value: dbBridge.Identifier}}, bson.M{"$setOnInsert": dbBridge}, options.Update().SetUpsert(true))
-	if err != nil {
-		return models.Bridge{}, err
-	}
-	if updateResults.UpsertedCount == 0 {
-		return models.Bridge{}, errors.New("bridge Identifier already exists")
-	}
-
-	return models.Bridge{
-		Identifier: dbBridge.Identifier,
-		URI:        dbBridge.URI,
-	}, nil
-}
-
-func (persistence MongoDBDevicePersistence) ForgetBridge(bridgeKey devicestoretemplates.BridgeKey) error {
-	handle := persistence.getBridgeCollection()
-	result, err := handle.DeleteMany(context.TODO(), bson.D{primitive.E{Key: "identifier", Value: bridgeKey}})
-	if err != nil {
-		return err
-	}
-	if result.DeletedCount == 0 {
-		return NotFound(errors.New("could not find Bridge"))
-	}
-	capHandle := persistence.getDeviceCapabilityCollection()
-	result, err = capHandle.DeleteMany(context.TODO(), bson.D{primitive.E{Key: "capabilityBridgeKey", Value: bridgeKey}})
-	if err != nil {
-		return err
-	}
-	logging.Info("Capabilities removed as a consequence of removing bridge", map[string]string{"amount": strconv.Itoa(int(result.DeletedCount))})
-	return nil
-}
-
-func (persistence MongoDBDevicePersistence) ListBridges() ([]devicestoretemplates.Bridge, error) {
-	handle := persistence.getBridgeCollection()
-	dbBridges := []models.Bridge{}
-	cursor, err := handle.Find(context.TODO(), bson.D{})
-	if err != nil {
-		return nil, err
-	}
-	err = cursor.All(context.TODO(), &dbBridges)
-	if err != nil {
-		return nil, err
-	}
-	apiBridges := []devicestoretemplates.Bridge{}
-	for _, bridge := range dbBridges {
-		apiBridges = append(apiBridges, bridge.ConvertToAPIBridge())
-	}
-	return apiBridges, nil
 }
 
 func NewMongoDBDevicePersistence(conf config.MongoDBConfig) (DevicePersistenceDB, error) {
