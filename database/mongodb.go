@@ -1,14 +1,8 @@
 package database
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"net/http"
-	"net/url"
-	"path"
 	"strconv"
 
 	"github.com/Kaese72/device-store/config"
@@ -170,35 +164,6 @@ func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capNa
 		CapabilityBridgeKey: rCapabilities[0].CapabilityBridgeKey,
 		LastSeen:            rCapabilities[0].LastSeen,
 	}, nil
-}
-
-func (persistence MongoDBDevicePersistence) TriggerCapability(deviceId string, capName string, capArgs devicestoretemplates.CapabilityArgs) error {
-	cap, err := persistence.GetCapability(deviceId, capName)
-	if err != nil {
-		return err
-	}
-	jsonEncoded, err := json.Marshal(capArgs)
-	if err != nil {
-		return err
-	}
-
-	bridgeURL, err := url.Parse(cap.CapabilityBridgeURI)
-	if err != nil {
-		return err
-	}
-	bridgeURL.Path = path.Join(bridgeURL.Path, fmt.Sprintf("devices/%s/capabilities/%s", deviceId, capName))
-	logging.Info("Triggering capability", map[string]string{"capUri": bridgeURL.String()})
-	resp, err := http.Post(bridgeURL.String(), "application/json", bytes.NewBuffer(jsonEncoded))
-	if err != nil {
-		// FIXME What if there is interesting debug information in the response?
-		// We should log it or incorporate it in the response message or something
-		return err
-	}
-	logging.Info("Capability triggered", map[string]string{"rCode": strconv.Itoa(resp.StatusCode)})
-	// It is the callers responsibility to Close the body reader
-	// But there should not be anything of interest here at the moment
-	defer resp.Body.Close()
-	return nil
 }
 
 func NewMongoDBDevicePersistence(conf config.MongoDBConfig) (DevicePersistenceDB, error) {

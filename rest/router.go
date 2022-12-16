@@ -1,10 +1,13 @@
 package rest
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 
 	"github.com/Kaese72/device-store/adapterattendant"
 	"github.com/Kaese72/device-store/config"
@@ -125,12 +128,44 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 			}
 
 		}
+
 		logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%s'", capabilityID, deviceID))
-		err = persistence.TriggerCapability(deviceID, capabilityID, capArg)
+		//err = persistence.TriggerCapability(deviceID, capabilityID, capArg)
+		capability, err := persistence.GetCapability(deviceID, capabilityID)
 		if err != nil {
-			ServeHTTPError(err, writer)
+			ServeHTTPError(database.UnknownError(err), writer)
 			return
 		}
+		jsonEncoded, err := json.Marshal(capArg)
+		if err != nil {
+			ServeHTTPError(database.UnknownError(err), writer)
+			return
+		}
+
+		adapter, err := attendant.GetAdapter(string(capability.CapabilityBridgeKey))
+		if err != nil {
+			ServeHTTPError(database.UnknownError(err), writer)
+			return
+		}
+		adapterURL, err := url.Parse(adapter.Address)
+		if err != nil {
+			ServeHTTPError(database.UnknownError(err), writer)
+			return
+		}
+
+		adapterURL.Path = fmt.Sprintf("devices/%s/capabilities/%s", deviceID, capabilityID)
+		logging.Info("Triggering capability", map[string]string{"capUri": adapterURL.String()})
+		resp, err := http.Post(adapterURL.String(), "application/json", bytes.NewBuffer(jsonEncoded))
+		if err != nil {
+			// FIXME What if there is interesting debug information in the response?
+			// We should log it or incorporate it in the response message or something
+			ServeHTTPError(database.UnknownError(err), writer)
+			return
+		}
+		// It is the callers responsibility to Close the body reader
+		// But there should not be anything of interest here at the moment
+		defer resp.Body.Close()
+		logging.Info("Capability triggered", map[string]string{"rCode": strconv.Itoa(resp.StatusCode)})
 
 	}).Methods("POST")
 
