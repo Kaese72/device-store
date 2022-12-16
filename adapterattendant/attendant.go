@@ -16,7 +16,8 @@ type Attendant interface {
 
 func NewAdapterAttendant(config config.AdapterAttendantConfig) Attendant {
 	return attendantClient{
-		URL: config.URL,
+		URL:   config.URL,
+		cache: map[string]AdapterCache{},
 	}
 }
 
