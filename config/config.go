@@ -58,7 +58,7 @@ func (conf AdapterAttendantConfig) Validate() error {
 type Config struct {
 	Database         DatabaseConfig         `json:"database" mapstructure:"database"`
 	HTTPConfig       HTTPConfig             `json:"http-server" mapstructure:"http-server"`
-	AdapterAttendant AdapterAttendantConfig `json:"adapter-attendant"`
+	AdapterAttendant AdapterAttendantConfig `json:"adapter-attendant" mapstructure:"adapter-attendant"`
 }
 
 func (conf *Config) PopulateExample() {
