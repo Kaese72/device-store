@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/Kaese72/sdup-lib/devicestoretemplates"
-	"github.com/Kaese72/sdup-lib/sduptemplates"
 )
 
 func ConvertAttributesToAPIDevice(singleDeviceAttributes []MongoDeviceAttribute) (devicestoretemplates.Device, error) {
@@ -15,13 +14,13 @@ func ConvertAttributesToAPIDevice(singleDeviceAttributes []MongoDeviceAttribute)
 	deviceId := singleDeviceAttributes[0].DeviceId
 	device := devicestoretemplates.Device{
 		Identifier: deviceId,
-		Attributes: map[sduptemplates.AttributeKey]devicestoretemplates.AttributeState{},
+		Attributes: map[devicestoretemplates.AttributeKey]devicestoretemplates.AttributeState{},
 	}
 	for _, attribute := range singleDeviceAttributes {
 		if attribute.DeviceId != deviceId {
 			return device, errors.New("deviceIds do not match")
 		}
-		device.Attributes[sduptemplates.AttributeKey(attribute.AttributeName)] = attribute.AttributeState.ConvertToAPIAttributeState()
+		device.Attributes[devicestoretemplates.AttributeKey(attribute.AttributeName)] = attribute.AttributeState.ConvertToAPIAttributeState()
 	}
 	return device, nil
 }

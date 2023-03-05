@@ -10,7 +10,6 @@ import (
 	intermediary "github.com/Kaese72/device-store/models"
 	"github.com/Kaese72/sdup-lib/devicestoretemplates"
 	"github.com/Kaese72/sdup-lib/logging"
-	"github.com/Kaese72/sdup-lib/sduptemplates"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -94,9 +93,9 @@ func (persistence MongoDBDevicePersistence) GetDeviceByIdentifier(identifier str
 		logging.Info("Found capabilities for device", map[string]string{"identifier": identifier, "nCap": strconv.Itoa(len(deviceCapabilities))})
 		deviceCapabilities = models.ReduceToMostRelevantCapabilities(deviceCapabilities)
 		logging.Info("Found capabilities for device after deduplication", map[string]string{"identifier": identifier, "nCap": strconv.Itoa(len(deviceCapabilities))})
-		rDevice.Capabilities = map[sduptemplates.CapabilityKey]devicestoretemplates.Capability{}
+		rDevice.Capabilities = map[devicestoretemplates.CapabilityKey]devicestoretemplates.Capability{}
 		for _, cap := range deviceCapabilities {
-			rDevice.Capabilities[sduptemplates.CapabilityKey(cap.CapabilityName)] = cap.ConvertToAPICapability()
+			rDevice.Capabilities[devicestoretemplates.CapabilityKey(cap.CapabilityName)] = cap.ConvertToAPICapability()
 		}
 	}
 	return rDevice, nil
