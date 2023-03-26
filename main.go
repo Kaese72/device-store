@@ -74,6 +74,8 @@ func main() {
 		return
 	}
 
+	logging.InitLoggers(conf.Logging)
+
 	persistence, err := database.NewDevicePersistenceDB(conf.Database)
 	if err != nil {
 		logging.Error(err.Error())
