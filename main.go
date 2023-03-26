@@ -45,6 +45,11 @@ func main() {
 	// # Device attendant
 	myVip.BindEnv("adapter-attendant.url")
 
+	// # Logging
+	myVip.BindEnv("logging.stdout")
+	myVip.SetDefault("logging.stdout", true)
+	myVip.BindEnv("logging.http.url")
+
 	var conf config.Config
 	err := myVip.Unmarshal(&conf)
 	if err != nil {
