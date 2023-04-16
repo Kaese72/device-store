@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Kaese72/adapter-attendant/rest/models"
-	"github.com/Kaese72/device-store/config"
+	"github.com/Kaese72/device-store/internal/config"
 )
 
 type Attendant interface {

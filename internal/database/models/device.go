@@ -3,7 +3,7 @@ package models
 import (
 	"errors"
 
-	"github.com/Kaese72/sdup-lib/devicestoretemplates"
+	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 )
 
 func ConvertAttributesToAPIDevice(singleDeviceAttributes []MongoDeviceAttribute) (devicestoretemplates.Device, error) {

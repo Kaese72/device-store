@@ -1,6 +1,6 @@
 package models
 
-import "github.com/Kaese72/sdup-lib/devicestoretemplates"
+import devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 
 type AttributeState struct {
 	Boolean *bool    `bson:"boolean-state"`

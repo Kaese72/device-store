@@ -5,11 +5,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Kaese72/device-store/adapterattendant"
-	"github.com/Kaese72/device-store/config"
-	"github.com/Kaese72/device-store/database"
+	"github.com/Kaese72/device-store/internal/adapterattendant"
+	"github.com/Kaese72/device-store/internal/config"
+	"github.com/Kaese72/device-store/internal/database"
 	"github.com/Kaese72/device-store/rest"
-	"github.com/Kaese72/sdup-lib/logging"
+	"github.com/Kaese72/huemie-lib/logging"
 	"github.com/spf13/viper"
 )
 

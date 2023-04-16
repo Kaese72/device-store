@@ -195,9 +195,9 @@ github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym
 github.com/DataDog/datadog-go v3.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/Kaese72/adapter-attendant v0.0.2 h1:oZ/Wr7gLR6RUCJhjvMmnFBiBWW9gktq/ya+qXiEtPhA=
 github.com/Kaese72/adapter-attendant v0.0.2/go.mod h1:HaqG4hMo6pNbQ94NlkyqZRimWiO4+mCVw/fl8xcCX14=
+github.com/Kaese72/huemie-lib v0.0.1 h1:Rxw9UEgcWcTuCdJY/QfNGFxCxnTqhxXMxRHUFF8nwNI=
+github.com/Kaese72/huemie-lib v0.0.1/go.mod h1:GgQ2M08uvgRm5ym4pfbJIjbOQmv3WyKJON1k9voUfNg=
 github.com/Kaese72/sdup-lib v0.0.3/go.mod h1:cx3owaCSTJYbHkPjcnBenjncQdQa8OvhRU2cyObxYCo=
-github.com/Kaese72/sdup-lib v0.0.10 h1:KtwMuOMbIrQ6uNdzS1WXogKd2OvVwNLMUeQ4nB8ocpU=
-github.com/Kaese72/sdup-lib v0.0.10/go.mod h1:obhpZVLWnCYH9KD68rnY/kIurFTMHOLGLpa87X1VdrI=
 github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46/go.mod h1:3wb06e3pkSAbeQ52E9H9iFoQsEEwGN64994WTCIhntQ=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=

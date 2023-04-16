@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/Kaese72/sdup-lib/devicestoretemplates"
+	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 	"go.mongodb.org/mongo-driver/bson"
 )
 

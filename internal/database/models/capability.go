@@ -3,15 +3,15 @@ package models
 import (
 	"time"
 
-	"github.com/Kaese72/sdup-lib/devicestoretemplates"
+	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
 type MongoDeviceCapability struct {
-	DeviceId            string                         `bson:"deviceId"`
-	CapabilityName      string                         `bson:"capabilityName"`
-	CapabilityBridgeKey devicestoretemplates.BridgeKey `bson:"capabilityBridgeKey"`
-	LastSeen            time.Time                      `bson:"lastSeen"`
+	DeviceId            string    `bson:"deviceId"`
+	CapabilityName      string    `bson:"capabilityName"`
+	CapabilityBridgeKey string    `bson:"capabilityBridgeKey"`
+	LastSeen            time.Time `bson:"lastSeen"`
 }
 
 func (capability MongoDeviceCapability) ConvertToAPICapability() devicestoretemplates.Capability {
@@ -33,7 +33,7 @@ func (capability MongoDeviceCapability) ConvertToUpdate() bson.M {
 	}
 }
 
-func ExtractCapabilityModelsFromAPIDeviceModel(device devicestoretemplates.Device, bridgeKey devicestoretemplates.BridgeKey) []MongoDeviceCapability {
+func ExtractCapabilityModelsFromAPIDeviceModel(device devicestoretemplates.Device, bridgeKey string) []MongoDeviceCapability {
 	capabilities := []MongoDeviceCapability{}
 	for capabilityKey := range device.Capabilities {
 		capabilities = append(capabilities, MongoDeviceCapability{

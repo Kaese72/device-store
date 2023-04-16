@@ -69,7 +69,7 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 				http.Error(writer, fmt.Sprintf("Could not get adapter, '%s'", err.Error()), http.StatusBadRequest)
 				return
 			}
-			rDevice, err = persistence.UpdateDeviceAttributesAndCapabilities(device, bridgeKey)
+			rDevice, err = persistence.UpdateDeviceAttributesAndCapabilities(device, string(bridgeKey))
 			if err != nil {
 				http.Error(writer, err.Error(), http.StatusInternalServerError)
 				return

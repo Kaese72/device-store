@@ -5,11 +5,11 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/Kaese72/device-store/config"
-	"github.com/Kaese72/device-store/database/models"
-	intermediary "github.com/Kaese72/device-store/models"
-	"github.com/Kaese72/sdup-lib/devicestoretemplates"
-	"github.com/Kaese72/sdup-lib/logging"
+	"github.com/Kaese72/device-store/internal/config"
+	"github.com/Kaese72/device-store/internal/database/models"
+	intermediary "github.com/Kaese72/device-store/internal/models/intermediary"
+	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
+	"github.com/Kaese72/huemie-lib/logging"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -122,7 +122,7 @@ func (persistence MongoDBDevicePersistence) UpdateDeviceAttributes(apiDevice dev
 	}
 }
 
-func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilities(apiDevice devicestoretemplates.Device, sourceBridge devicestoretemplates.BridgeKey) (devicestoretemplates.Device, error) {
+func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilities(apiDevice devicestoretemplates.Device, sourceBridge string) (devicestoretemplates.Device, error) {
 	_, err := persistence.UpdateDeviceAttributes(apiDevice, false)
 	if err != nil {
 		logging.Info(err.Error())

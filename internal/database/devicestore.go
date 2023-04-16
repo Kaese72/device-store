@@ -3,9 +3,9 @@ package database
 import (
 	"errors"
 
-	"github.com/Kaese72/device-store/config"
-	"github.com/Kaese72/device-store/models"
-	"github.com/Kaese72/sdup-lib/devicestoretemplates"
+	"github.com/Kaese72/device-store/internal/config"
+	models "github.com/Kaese72/device-store/internal/models/intermediary"
+	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 )
 
 type DevicePersistenceDB interface {
@@ -15,7 +15,7 @@ type DevicePersistenceDB interface {
 	//// Attributes
 	UpdateDeviceAttributes(devicestoretemplates.Device, bool) (devicestoretemplates.Device, error)
 	//// Capabilities
-	UpdateDeviceAttributesAndCapabilities(devicestoretemplates.Device, devicestoretemplates.BridgeKey) (devicestoretemplates.Device, error)
+	UpdateDeviceAttributesAndCapabilities(devicestoretemplates.Device, string) (devicestoretemplates.Device, error)
 	GetCapability(deviceId string, capName string) (models.CapabilityIntermediary, error)
 	//TriggerCapability(deviceId string, capName string, capArgs devicestoretemplates.CapabilityArgs) error
 }
