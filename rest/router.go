@@ -154,7 +154,7 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 		}
 
 		adapterURL.Path = fmt.Sprintf("devices/%s/capabilities/%s", deviceID, capabilityID)
-		logging.Info("Triggering capability", map[string]string{"capUri": adapterURL.String()})
+		logging.Info("Triggering capability", map[string]interface{}{"capUri": adapterURL.String()})
 		resp, err := http.Post(adapterURL.String(), "application/json", bytes.NewBuffer(jsonEncoded))
 		if err != nil {
 			// FIXME What if there is interesting debug information in the response?
@@ -165,7 +165,7 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 		// It is the callers responsibility to Close the body reader
 		// But there should not be anything of interest here at the moment
 		defer resp.Body.Close()
-		logging.Info("Capability triggered", map[string]string{"rCode": strconv.Itoa(resp.StatusCode)})
+		logging.Info("Capability triggered", map[string]interface{}{"rCode": strconv.Itoa(resp.StatusCode)})
 
 	}).Methods("POST")
 

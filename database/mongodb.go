@@ -41,12 +41,12 @@ func (persistence MongoDBDevicePersistence) FilterDevices() ([]devicestoretempla
 	}
 	err = results.All(context.TODO(), &rDeviceAttributes)
 	if err != nil {
-		logging.Error("Error encountered while decoding devices", map[string]string{"error": err.Error()})
+		logging.Error("Error encountered while decoding devices", map[string]interface{}{"error": err.Error()})
 		return nil, UnknownError(err)
 	}
 	apiDevices, err := models.CreateAPIDevicesFromAttributes(rDeviceAttributes)
 	if err != nil {
-		logging.Error("Error encountered while converting mongo devices", map[string]string{"error": err.Error()})
+		logging.Error("Error encountered while converting mongo devices", map[string]interface{}{"error": err.Error()})
 		return nil, UnknownError(err)
 	}
 
@@ -90,9 +90,9 @@ func (persistence MongoDBDevicePersistence) GetDeviceByIdentifier(identifier str
 			logging.Info(err.Error())
 			return devicestoretemplates.Device{}, UnknownError(err)
 		}
-		logging.Info("Found capabilities for device", map[string]string{"identifier": identifier, "nCap": strconv.Itoa(len(deviceCapabilities))})
+		logging.Info("Found capabilities for device", map[string]interface{}{"identifier": identifier, "nCap": strconv.Itoa(len(deviceCapabilities))})
 		deviceCapabilities = models.ReduceToMostRelevantCapabilities(deviceCapabilities)
-		logging.Info("Found capabilities for device after deduplication", map[string]string{"identifier": identifier, "nCap": strconv.Itoa(len(deviceCapabilities))})
+		logging.Info("Found capabilities for device after deduplication", map[string]interface{}{"identifier": identifier, "nCap": strconv.Itoa(len(deviceCapabilities))})
 		rDevice.Capabilities = map[devicestoretemplates.CapabilityKey]devicestoretemplates.Capability{}
 		for _, cap := range deviceCapabilities {
 			rDevice.Capabilities[devicestoretemplates.CapabilityKey(cap.CapabilityName)] = cap.ConvertToAPICapability()
@@ -109,7 +109,7 @@ func (persistence MongoDBDevicePersistence) UpdateDeviceAttributes(apiDevice dev
 	//FIXME updates
 	attributeUpdates := models.ExtractAttributeModelsFromAPIDeviceModel(apiDevice)
 	for _, attributeUpdate := range attributeUpdates {
-		logging.Info("Updating attribute", map[string]string{"deviceId": attributeUpdate.DeviceId, "attributeName": attributeUpdate.AttributeName})
+		logging.Info("Updating attribute", map[string]interface{}{"deviceId": attributeUpdate.DeviceId, "attributeName": attributeUpdate.AttributeName})
 		attrHandle.FindOneAndUpdate(context.TODO(), bson.D{primitive.E{Key: "deviceId", Value: attributeUpdate.DeviceId}, primitive.E{Key: "attributeName", Value: attributeUpdate.AttributeName}}, attributeUpdate.ConvertToUpdate(), options.FindOneAndUpdate().SetUpsert(true))
 		// FIXME Determine if todo
 		// FIXME Error handling
@@ -131,7 +131,7 @@ func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilitie
 	mongoCapabilities := models.ExtractCapabilityModelsFromAPIDeviceModel(apiDevice, sourceBridge)
 	capHandle := persistence.getDeviceCapabilityCollection()
 	for _, capability := range mongoCapabilities {
-		logging.Info("Updating attribute", map[string]string{"deviceId": capability.DeviceId, "capabilityName": capability.CapabilityName})
+		logging.Info("Updating attribute", map[string]interface{}{"deviceId": capability.DeviceId, "capabilityName": capability.CapabilityName})
 		capHandle.FindOneAndUpdate(context.TODO(), bson.D{primitive.E{Key: "deviceId", Value: capability.DeviceId}, primitive.E{Key: "capabilityName", Value: capability.CapabilityName}}, capability.ConvertToUpdate(), options.FindOneAndUpdate().SetUpsert(true))
 		// FIXME Determine if todo
 		// FIXME Error handling
@@ -141,7 +141,7 @@ func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilitie
 }
 
 func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capName string) (intermediary.CapabilityIntermediary, error) {
-	logging.Info("Fetching capability", map[string]string{"deviceId": deviceId, "capabilityName": capName})
+	logging.Info("Fetching capability", map[string]interface{}{"deviceId": deviceId, "capabilityName": capName})
 	capHandle := persistence.getDeviceCapabilityCollection()
 	rCapabilities := []models.MongoDeviceCapability{}
 	cursor, err := capHandle.Find(context.TODO(), bson.D{primitive.E{Key: "deviceId", Value: deviceId}, primitive.E{Key: "capabilityName", Value: capName}}, options.Find().SetLimit(1), options.Find().SetSort(bson.D{{Key: "lastSeen", Value: -1}}))

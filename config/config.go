@@ -2,8 +2,6 @@ package config
 
 import (
 	"errors"
-
-	"github.com/Kaese72/sdup-lib/logging"
 )
 
 type MongoDBConfig struct {
@@ -61,7 +59,6 @@ type Config struct {
 	Database         DatabaseConfig         `json:"database" mapstructure:"database"`
 	HTTPConfig       HTTPConfig             `json:"http-server" mapstructure:"http-server"`
 	AdapterAttendant AdapterAttendantConfig `json:"adapter-attendant" mapstructure:"adapter-attendant"`
-	Logging          logging.Config         `json:"logging"`
 }
 
 func (conf *Config) PopulateExample() {

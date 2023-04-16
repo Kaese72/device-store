@@ -1,8 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Kaese72/device-store/adapterattendant"
@@ -54,32 +54,23 @@ func main() {
 	err := myVip.Unmarshal(&conf)
 	if err != nil {
 		fmt.Println(err.Error())
-		return
+		os.Exit(1)
 	}
 
 	if err := myVip.WriteConfigAs("./config.used.yaml"); err != nil {
 		logging.Error(err.Error())
-		return
+		os.Exit(1)
 	}
 
 	if err := conf.Validate(); err != nil {
 		logging.Error(err.Error())
-		conf.PopulateExample()
-		res, err := json.MarshalIndent(conf, "", "   ")
-		if err != nil {
-			logging.Error(err.Error())
-			return
-		}
-		fmt.Print(string(res))
-		return
+		os.Exit(1)
 	}
-
-	logging.InitLoggers(conf.Logging)
 
 	persistence, err := database.NewDevicePersistenceDB(conf.Database)
 	if err != nil {
 		logging.Error(err.Error())
-		return
+		os.Exit(1)
 	}
 	adapterAttendant := adapterattendant.NewAdapterAttendant(conf.AdapterAttendant)
 	logging.Info("Successfully contacted database")
