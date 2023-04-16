@@ -8,7 +8,7 @@ import (
 	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/config"
 	"github.com/Kaese72/device-store/internal/database"
-	"github.com/Kaese72/device-store/rest"
+	"github.com/Kaese72/device-store/internal/server"
 	"github.com/Kaese72/huemie-lib/logging"
 	"github.com/spf13/viper"
 )
@@ -74,5 +74,5 @@ func main() {
 	}
 	adapterAttendant := adapterattendant.NewAdapterAttendant(conf.AdapterAttendant)
 	logging.Info("Successfully contacted database")
-	rest.PersistenceAPIListenAndServe(conf.HTTPConfig, persistence, adapterAttendant)
+	server.PersistenceAPIListenAndServe(conf.HTTPConfig, persistence, adapterAttendant)
 }
