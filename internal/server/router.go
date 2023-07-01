@@ -32,7 +32,7 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 	router := mux.NewRouter()
 
 	//Everything else (not /auth/login) should have the authentication middleware
-	apiv0 := router.PathPrefix("/rest/v0/").Subrouter()
+	apiv0 := router.PathPrefix("/device-store/v0/").Subrouter()
 
 	apiv0.HandleFunc("/devices", func(writer http.ResponseWriter, reader *http.Request) {
 		devices, err := persistence.FilterDevices()

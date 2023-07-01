@@ -35,7 +35,7 @@ func (client attendantClient) GetAdapter(adapterName string) (models.Adapter, er
 	if cached, ok := client.cache[adapterName]; ok && cached.LastUpdate.After(time.Now().Add(-1*time.Hour)) {
 		return cached.Adapter, nil
 	}
-	resp, err := http.Get(fmt.Sprintf("%s/rest/v0/adapters/%s", client.URL, adapterName))
+	resp, err := http.Get(fmt.Sprintf("%s/adapter-attendant/v0/adapters/%s", client.URL, adapterName))
 	if err != nil {
 		return models.Adapter{}, err
 	}
