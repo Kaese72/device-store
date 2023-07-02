@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 
@@ -92,7 +91,7 @@ func init() {
 	viper.BindEnv("logging.http.url")
 	err := viper.Unmarshal(&Loaded)
 	if err != nil {
-		fmt.Println(err.Error())
+		logging.Error(err.Error())
 		os.Exit(1)
 	}
 	if err := Loaded.Validate(); err != nil {
