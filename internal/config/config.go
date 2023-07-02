@@ -2,6 +2,12 @@ package config
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/Kaese72/huemie-lib/logging"
+	"github.com/spf13/viper"
 )
 
 type MongoDBConfig struct {
@@ -28,22 +34,6 @@ func (conf DatabaseConfig) Validate() error {
 	return errors.New("need to supply at least one database backend")
 }
 
-type HTTPConfig struct {
-	Address string `json:"address" mapstructure:"address"`
-	Port    int    `json:"port" mapstructure:"port"`
-}
-
-func (conf HTTPConfig) Validate() error {
-	if len(conf.Address) == 0 {
-		return errors.New("need to supply a http listen address")
-	}
-
-	if conf.Port == 0 {
-		return errors.New("need to supply a http listen port")
-	}
-	return nil
-}
-
 type AdapterAttendantConfig struct {
 	URL string `json:"url" mapstructure:"url"`
 }
@@ -57,7 +47,6 @@ func (conf AdapterAttendantConfig) Validate() error {
 
 type Config struct {
 	Database         DatabaseConfig         `json:"database" mapstructure:"database"`
-	HTTPConfig       HTTPConfig             `json:"http-server" mapstructure:"http-server"`
 	AdapterAttendant AdapterAttendantConfig `json:"adapter-attendant" mapstructure:"adapter-attendant"`
 }
 
@@ -66,10 +55,6 @@ func (conf *Config) PopulateExample() {
 		MongoDB: MongoDBConfig{
 			ConnectionString: "localhost:27017",
 		},
-	}
-	conf.HTTPConfig = HTTPConfig{
-		Address: "localhost",
-		Port:    8080,
 	}
 	conf.AdapterAttendant = AdapterAttendantConfig{
 		URL: "http://somehost:8080/rest/v0",
@@ -80,11 +65,38 @@ func (conf Config) Validate() error {
 	if err := conf.Database.Validate(); err != nil {
 		return err
 	}
-	if err := conf.HTTPConfig.Validate(); err != nil {
-		return err
-	}
 	if err := conf.AdapterAttendant.Validate(); err != nil {
 		return err
 	}
 	return nil
+}
+
+var Loaded Config
+
+func init() {
+	// We have elected to no use AutomaticEnv() because of https://github.com/spf13/viper/issues/584
+	// myVip.AutomaticEnv()
+	// Set replaces to allow keys like "database.mongodb.connection-string"
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+	// # Database configuration, if left out, assume no mongo configuration
+	viper.BindEnv("database.mongodb.connection-string")
+	viper.BindEnv("database.mongodb.db-name")
+	viper.SetDefault("database.mongodb.db-name", "huemie")
+
+	// # Device attendant
+	viper.BindEnv("adapter-attendant.url")
+
+	// # Logging
+	viper.BindEnv("logging.stdout")
+	viper.SetDefault("logging.stdout", true)
+	viper.BindEnv("logging.http.url")
+	err := viper.Unmarshal(&Loaded)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	if err := Loaded.Validate(); err != nil {
+		logging.Error(err.Error())
+		os.Exit(1)
+	}
 }

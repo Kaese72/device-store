@@ -10,7 +10,6 @@ import (
 	"strconv"
 
 	"github.com/Kaese72/device-store/internal/adapterattendant"
-	"github.com/Kaese72/device-store/internal/config"
 	"github.com/Kaese72/device-store/internal/database"
 	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 	"github.com/Kaese72/huemie-lib/logging"
@@ -28,7 +27,7 @@ func ServeHTTPError(err error, writer http.ResponseWriter) {
 	}
 }
 
-func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database.DevicePersistenceDB, attendant adapterattendant.Attendant) error {
+func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, attendant adapterattendant.Attendant) error {
 	router := mux.NewRouter()
 
 	//Everything else (not /auth/login) should have the authentication middleware
@@ -171,7 +170,7 @@ func PersistenceAPIListenAndServe(config config.HTTPConfig, persistence database
 
 	server := &http.Server{
 		Handler: router,
-		Addr:    fmt.Sprintf("%s:%d", config.Address, config.Port),
+		Addr:    "0.0.0.0:8080",
 	}
 
 	if err := server.ListenAndServe(); err != nil {
