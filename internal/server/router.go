@@ -86,7 +86,6 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 			}
 			_, err := attendant.GetAdapter(bridgeKey)
 			if err != nil {
-
 				serveHTTPError(systemerrors.WrapSystemError(fmt.Errorf("could not get adapter, '%s'", err.Error()), systemerrors.NotFound), ctx, writer)
 				return
 			}

@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/Kaese72/device-store/internal/config"
@@ -156,7 +157,7 @@ func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capNa
 		return intermediary.CapabilityIntermediary{}, systemerrors.WrapSystemError(err, systemerrors.InternalError)
 	}
 	if len(rCapabilities) != 1 {
-		return intermediary.CapabilityIntermediary{}, systemerrors.WrapSystemError(err, systemerrors.NotFound)
+		return intermediary.CapabilityIntermediary{}, systemerrors.WrapSystemError(fmt.Errorf("Unexpected amount of capabilities found, %d != 1", len(rCapabilities)), systemerrors.NotFound)
 	}
 	return intermediary.CapabilityIntermediary{
 		DeviceId:            rCapabilities[0].DeviceId,
