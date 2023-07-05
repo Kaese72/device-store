@@ -10,6 +10,7 @@ require (
 	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/spf13/viper v1.16.0
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a // indirect
+	go.elastic.co/apm v1.15.0
 	go.elastic.co/apm/module/apmgorilla/v2 v2.4.3
 	go.mongodb.org/mongo-driver v1.12.0
 	golang.org/x/crypto v0.10.0 // indirect
