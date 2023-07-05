@@ -14,6 +14,7 @@ import (
 	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 	"github.com/Kaese72/huemie-lib/logging"
 	"github.com/gorilla/mux"
+	"go.elastic.co/apm/module/apmgorilla/v2"
 )
 
 func ServeHTTPError(err error, writer http.ResponseWriter) {
@@ -29,6 +30,7 @@ func ServeHTTPError(err error, writer http.ResponseWriter) {
 
 func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, attendant adapterattendant.Attendant) error {
 	router := mux.NewRouter()
+	apmgorilla.Instrument(router)
 
 	//Everything else (not /auth/login) should have the authentication middleware
 	apiv0 := router.PathPrefix("/device-store/v0/").Subrouter()
