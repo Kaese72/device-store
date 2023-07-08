@@ -21,8 +21,8 @@ func extractApmDict(ctx context.Context) map[string]interface{} {
 				labels["span.id"] = span.TraceContext().Span.String()
 			}
 		}
-		return labels
 	}
+	return labels
 }
 
 func Info(msg string, ctx context.Context, data ...map[string]interface{}) {
