@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/Kaese72/device-store/internal/adapterattendant"
@@ -15,10 +16,10 @@ func main() {
 
 	persistence, err := database.NewDevicePersistenceDB(config.Loaded.Database)
 	if err != nil {
-		logging.Error(err.Error(), nil)
+		logging.Error(err.Error(), context.Background())
 		os.Exit(1)
 	}
 	adapterAttendant := adapterattendant.NewAdapterAttendant(config.Loaded.AdapterAttendant)
-	logging.Info("Successfully contacted database", nil)
+	logging.Info("Successfully contacted database", context.Background())
 	server.PersistenceAPIListenAndServe(persistence, adapterAttendant)
 }
