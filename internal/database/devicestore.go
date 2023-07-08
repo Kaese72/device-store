@@ -19,7 +19,6 @@ type DevicePersistenceDB interface {
 	//// Capabilities
 	UpdateDeviceAttributesAndCapabilities(devicestoretemplates.Device, string, context.Context) (devicestoretemplates.Device, systemerrors.SystemError)
 	GetCapability(string, string, context.Context) (models.CapabilityIntermediary, systemerrors.SystemError)
-	//TriggerCapability(deviceId string, capName string, capArgs devicestoretemplates.CapabilityArgs) error
 }
 
 func NewDevicePersistenceDB(conf config.DatabaseConfig) (DevicePersistenceDB, error) {

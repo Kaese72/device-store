@@ -1,16 +1,14 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strconv"
 
 	"github.com/Kaese72/device-store/internal/adapterattendant"
+	"github.com/Kaese72/device-store/internal/adapters"
 	"github.com/Kaese72/device-store/internal/database"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/systemerrors"
@@ -152,13 +150,7 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 		}
 
 		logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%s'", capabilityID, deviceID), ctx)
-		//err = persistence.TriggerCapability(deviceID, capabilityID, capArg)
 		capability, err := persistence.GetCapability(deviceID, capabilityID, ctx)
-		if err != nil {
-			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
-			return
-		}
-		jsonEncoded, err := json.Marshal(capArg)
 		if err != nil {
 			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
 			return
@@ -169,25 +161,12 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
 			return
 		}
-		adapterURL, err := url.Parse(adapter.Address)
+		sysErr := adapters.TriggerDeviceCapability(ctx, adapter, deviceID, capabilityID, capArg)
 		if err != nil {
-			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
+			serveHTTPError(sysErr, ctx, writer)
 			return
 		}
-
-		adapterURL.Path = fmt.Sprintf("devices/%s/capabilities/%s", deviceID, capabilityID)
-		logging.Info("Triggering capability", ctx, map[string]interface{}{"capUri": adapterURL.String()})
-		resp, err := http.Post(adapterURL.String(), "application/json", bytes.NewBuffer(jsonEncoded))
-		if err != nil {
-			// FIXME What if there is interesting debug information in the response?
-			// We should log it or incorporate it in the response message or something
-			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
-			return
-		}
-		// It is the callers responsibility to Close the body reader
-		// But there should not be anything of interest here at the moment
-		defer resp.Body.Close()
-		logging.Info("Capability triggered", ctx, map[string]interface{}{"rCode": strconv.Itoa(resp.StatusCode)})
+		logging.Info("Capability seemingly successfully triggered", ctx)
 
 	}).Methods("POST")
 
