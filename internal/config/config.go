@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Kaese72/huemie-lib/logging"
+	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/spf13/viper"
 )
 
@@ -91,11 +91,11 @@ func init() {
 	viper.BindEnv("logging.http.url")
 	err := viper.Unmarshal(&Loaded)
 	if err != nil {
-		logging.Error(err.Error())
+		logging.Error(err.Error(), nil)
 		os.Exit(1)
 	}
 	if err := Loaded.Validate(); err != nil {
-		logging.Error(err.Error())
+		logging.Error(err.Error(), nil)
 		os.Exit(1)
 	}
 }

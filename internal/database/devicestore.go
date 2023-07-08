@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"errors"
 
 	"github.com/Kaese72/device-store/internal/config"
@@ -11,13 +12,13 @@ import (
 
 type DevicePersistenceDB interface {
 	// Device Control
-	FilterDevices() ([]devicestoretemplates.Device, systemerrors.SystemError)
-	GetDeviceByIdentifier(string, bool) (devicestoretemplates.Device, systemerrors.SystemError)
+	FilterDevices(context.Context) ([]devicestoretemplates.Device, systemerrors.SystemError)
+	GetDeviceByIdentifier(string, bool, context.Context) (devicestoretemplates.Device, systemerrors.SystemError)
 	//// Attributes
-	UpdateDeviceAttributes(devicestoretemplates.Device, bool) (devicestoretemplates.Device, systemerrors.SystemError)
+	UpdateDeviceAttributes(devicestoretemplates.Device, bool, context.Context) (devicestoretemplates.Device, systemerrors.SystemError)
 	//// Capabilities
-	UpdateDeviceAttributesAndCapabilities(devicestoretemplates.Device, string) (devicestoretemplates.Device, systemerrors.SystemError)
-	GetCapability(deviceId string, capName string) (models.CapabilityIntermediary, systemerrors.SystemError)
+	UpdateDeviceAttributesAndCapabilities(devicestoretemplates.Device, string, context.Context) (devicestoretemplates.Device, systemerrors.SystemError)
+	GetCapability(string, string, context.Context) (models.CapabilityIntermediary, systemerrors.SystemError)
 	//TriggerCapability(deviceId string, capName string, capArgs devicestoretemplates.CapabilityArgs) error
 }
 

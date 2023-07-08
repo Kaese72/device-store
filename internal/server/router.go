@@ -54,7 +54,7 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 
 	apiv0.HandleFunc("/devices", func(writer http.ResponseWriter, reader *http.Request) {
 		ctx := reader.Context()
-		devices, err := persistence.FilterDevices()
+		devices, err := persistence.FilterDevices(ctx)
 		if err != nil {
 			serveHTTPError(err, ctx, writer)
 			return
@@ -89,13 +89,13 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 				serveHTTPError(systemerrors.WrapSystemError(fmt.Errorf("could not get adapter, '%s'", err.Error()), systemerrors.NotFound), ctx, writer)
 				return
 			}
-			rDevice, err = persistence.UpdateDeviceAttributesAndCapabilities(device, string(bridgeKey))
+			rDevice, err = persistence.UpdateDeviceAttributesAndCapabilities(device, string(bridgeKey), ctx)
 			if err != nil {
 				serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
 				return
 			}
 		} else {
-			rDevice, err = persistence.UpdateDeviceAttributes(device, true)
+			rDevice, err = persistence.UpdateDeviceAttributes(device, true, ctx)
 			if err != nil {
 				serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
 				return
@@ -117,7 +117,7 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 		vars := mux.Vars(reader)
 		deviceID := vars["deviceID"]
 		logging.Info(fmt.Sprintf("Getting device with identifier '%s'", deviceID), ctx)
-		device, err := persistence.GetDeviceByIdentifier(deviceID, true)
+		device, err := persistence.GetDeviceByIdentifier(deviceID, true, ctx)
 		if err != nil {
 			serveHTTPError(err, ctx, writer)
 			return
@@ -153,7 +153,7 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 
 		logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%s'", capabilityID, deviceID), ctx)
 		//err = persistence.TriggerCapability(deviceID, capabilityID, capArg)
-		capability, err := persistence.GetCapability(deviceID, capabilityID)
+		capability, err := persistence.GetCapability(deviceID, capabilityID, ctx)
 		if err != nil {
 			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
 			return
