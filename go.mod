@@ -12,8 +12,9 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a // indirect
 	go.elastic.co/apm v1.15.0
 	go.elastic.co/apm/module/apmgorilla/v2 v2.4.3
+	go.elastic.co/apm/module/apmhttp/v2 v2.4.3
 	go.elastic.co/apm/module/apmmongo/v2 v2.4.3
 	go.mongodb.org/mongo-driver v1.12.0
-	golang.org/x/crypto v0.10.0 // indirect
+	golang.org/x/net v0.12.0
 	golang.org/x/sync v0.3.0 // indirect
 )

@@ -1,6 +1,7 @@
 package adapterattendant
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,10 +9,12 @@ import (
 
 	"github.com/Kaese72/adapter-attendant/rest/models"
 	"github.com/Kaese72/device-store/internal/config"
+	"go.elastic.co/apm/module/apmhttp/v2"
+	"golang.org/x/net/context/ctxhttp"
 )
 
 type Attendant interface {
-	GetAdapter(string) (models.Adapter, error)
+	GetAdapter(string, context.Context) (models.Adapter, error)
 }
 
 func NewAdapterAttendant(config config.AdapterAttendantConfig) Attendant {
@@ -31,11 +34,13 @@ type attendantClient struct {
 	cache map[string]AdapterCache
 }
 
-func (client attendantClient) GetAdapter(adapterName string) (models.Adapter, error) {
+var tracingClient = apmhttp.WrapClient(http.DefaultClient)
+
+func (client attendantClient) GetAdapter(adapterName string, ctx context.Context) (models.Adapter, error) {
 	if cached, ok := client.cache[adapterName]; ok && cached.LastUpdate.After(time.Now().Add(-1*time.Hour)) {
 		return cached.Adapter, nil
 	}
-	resp, err := http.Get(fmt.Sprintf("%s/adapter-attendant/v0/adapters/%s", client.URL, adapterName))
+	resp, err := ctxhttp.Get(ctx, tracingClient, fmt.Sprintf("%s/adapter-attendant/v0/adapters/%s", client.URL, adapterName))
 	if err != nil {
 		return models.Adapter{}, err
 	}

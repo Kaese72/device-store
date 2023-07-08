@@ -84,7 +84,7 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 				http.Error(writer, "May not set capabilities when not identifying as an adapter", http.StatusBadRequest)
 				return
 			}
-			_, err := attendant.GetAdapter(bridgeKey)
+			_, err := attendant.GetAdapter(bridgeKey, ctx)
 			if err != nil {
 				serveHTTPError(systemerrors.WrapSystemError(fmt.Errorf("could not get adapter, '%s'", err.Error()), systemerrors.NotFound), ctx, writer)
 				return
@@ -164,7 +164,7 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 			return
 		}
 
-		adapter, err := attendant.GetAdapter(string(capability.CapabilityBridgeKey))
+		adapter, err := attendant.GetAdapter(string(capability.CapabilityBridgeKey), ctx)
 		if err != nil {
 			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
 			return
