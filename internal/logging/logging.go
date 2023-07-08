@@ -11,16 +11,18 @@ func extractApmDict(ctx context.Context) map[string]interface{} {
 	// Completely stolen from documentation, https://www.elastic.co/guide/en/apm/agent/go/current/log-correlation-ids.html
 	// Some slight modifications to create correct types
 	labels := map[string]interface{}{}
-	tx := apm.TransactionFromContext(ctx)
-	if tx != nil {
-		traceContext := tx.TraceContext()
-		labels["trace.id"] = traceContext.Trace.String()
-		labels["transaction.id"] = traceContext.Span.String()
-		if span := apm.SpanFromContext(ctx); span != nil {
-			labels["span.id"] = span.TraceContext().Span.String()
+	if ctx != nil {
+		tx := apm.TransactionFromContext(ctx)
+		if tx != nil {
+			traceContext := tx.TraceContext()
+			labels["trace.id"] = traceContext.Trace.String()
+			labels["transaction.id"] = traceContext.Span.String()
+			if span := apm.SpanFromContext(ctx); span != nil {
+				labels["span.id"] = span.TraceContext().Span.String()
+			}
 		}
+		return labels
 	}
-	return labels
 }
 
 func Info(msg string, ctx context.Context, data ...map[string]interface{}) {
