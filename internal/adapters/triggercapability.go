@@ -13,7 +13,7 @@ import (
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/systemerrors"
 	"github.com/Kaese72/device-store/rest/models"
-	"go.elastic.co/apm/module/apmhttp"
+	"go.elastic.co/apm/module/apmhttp/v2"
 	"golang.org/x/net/context/ctxhttp"
 )
 
