@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 
 	"github.com/pkg/errors"
@@ -159,7 +158,7 @@ func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capNa
 		return intermediary.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	if len(rCapabilities) != 1 {
-		return intermediary.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.NotFound, fmt.Errorf("could not find device capability", len(rCapabilities)))
+		return intermediary.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.NotFound, errors.New("could not find device capability"))
 	}
 	return intermediary.CapabilityIntermediary{
 		DeviceId:            rCapabilities[0].DeviceId,
