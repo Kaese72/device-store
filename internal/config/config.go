@@ -1,9 +1,10 @@
 package config
 
 import (
-	"errors"
 	"os"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/spf13/viper"

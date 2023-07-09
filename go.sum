@@ -610,8 +610,9 @@ github.com/DataDog/datadog-go v3.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3
 github.com/JohnCGriffin/overflow v0.0.0-20211019200055-46fa312c352c/go.mod h1:X0CRv0ky0k6m906ixxpzmDRLvX58TFUKS2eePweuyxk=
 github.com/Kaese72/adapter-attendant v0.0.9 h1:txO1gApL0iDXhfqR54S8knMguFV98FHkK53FEehAbNk=
 github.com/Kaese72/adapter-attendant v0.0.9/go.mod h1:m+frty2nFbjFAy2O3LNC6MVqrgQFg0ydIdp4xT4ReFw=
-github.com/Kaese72/huemie-lib v0.0.1 h1:Rxw9UEgcWcTuCdJY/QfNGFxCxnTqhxXMxRHUFF8nwNI=
 github.com/Kaese72/huemie-lib v0.0.1/go.mod h1:GgQ2M08uvgRm5ym4pfbJIjbOQmv3WyKJON1k9voUfNg=
+github.com/Kaese72/huemie-lib v0.0.4 h1:1XKoHddCTs1MwSJ3He073IubiC02Xtp7ouA3Hpq8UX0=
+github.com/Kaese72/huemie-lib v0.0.4/go.mod h1:bgSsaws5cjskRDWb9rhLQ63NcYvKWxloxkeC6/mHycQ=
 github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46/go.mod h1:3wb06e3pkSAbeQ52E9H9iFoQsEEwGN64994WTCIhntQ=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=

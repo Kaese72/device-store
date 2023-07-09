@@ -11,23 +11,23 @@ import (
 
 	adapterattendantmodels "github.com/Kaese72/adapter-attendant/rest/models"
 	"github.com/Kaese72/device-store/internal/logging"
-	"github.com/Kaese72/device-store/internal/systemerrors"
 	"github.com/Kaese72/device-store/rest/models"
+	"github.com/Kaese72/huemie-lib/liberrors"
 	"go.elastic.co/apm/module/apmhttp/v2"
 	"golang.org/x/net/context/ctxhttp"
 )
 
 var tracingClient = apmhttp.WrapClient(http.DefaultClient)
 
-func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, deviceID string, capabilityID string, capArg models.CapabilityArgs) systemerrors.SystemError {
+func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, deviceID string, capabilityID string, capArg models.CapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)
 	if err != nil {
-		return systemerrors.WrapSystemError(err, systemerrors.UserError)
+		return liberrors.NewApiError(liberrors.UserError, err)
 	}
 
 	adapterURL, err := url.Parse(adapter.Address)
 	if err != nil {
-		return systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return liberrors.NewApiError(liberrors.InternalError, err)
 	}
 
 	adapterURL.Path = fmt.Sprintf("devices/%s/capabilities/%s", deviceID, capabilityID)
@@ -36,7 +36,7 @@ func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels
 	if err != nil {
 		// FIXME What if there is interesting debug information in the response?
 		// We should log it or incorporate it in the response message or something
-		return systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	// It is the callers responsibility to Close the body reader
 	// But there should not be anything of interest here at the moment

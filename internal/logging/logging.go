@@ -7,7 +7,7 @@ import (
 	"go.elastic.co/apm/v2"
 )
 
-func extractApmDict(ctx context.Context) map[string]interface{} {
+func extractApmData(ctx context.Context) map[string]interface{} {
 	// Completely stolen from documentation, https://www.elastic.co/guide/en/apm/agent/go/current/log-correlation-ids.html
 	// Some slight modifications to create correct types
 	labels := map[string]interface{}{}
@@ -24,13 +24,17 @@ func extractApmDict(ctx context.Context) map[string]interface{} {
 }
 
 func Info(msg string, ctx context.Context, data ...map[string]interface{}) {
-	liblogger.Info(msg, append(data, extractApmDict(ctx))...)
+	liblogger.Info(msg, append(data, extractApmData(ctx))...)
 }
 
 func Error(msg string, ctx context.Context, data ...map[string]interface{}) {
-	liblogger.Error(msg, append(data, extractApmDict(ctx))...)
+	liblogger.Error(msg, append(data, extractApmData(ctx))...)
+}
+
+func ErrorErr(err error, ctx context.Context, data ...map[string]interface{}) {
+	liblogger.ErrError(err, append(data, extractApmData(ctx))...)
 }
 
 func Fatal(msg string, ctx context.Context, data ...map[string]interface{}) {
-	liblogger.Fatal(msg, append(data, extractApmDict(ctx))...)
+	liblogger.Fatal(msg, append(data, extractApmData(ctx))...)
 }

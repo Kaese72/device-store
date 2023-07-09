@@ -1,7 +1,7 @@
 package models
 
 import (
-	"errors"
+	"github.com/pkg/errors"
 
 	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 )

@@ -2,16 +2,17 @@ package database
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
+
+	"github.com/pkg/errors"
 
 	"github.com/Kaese72/device-store/internal/config"
 	"github.com/Kaese72/device-store/internal/database/models"
 	"github.com/Kaese72/device-store/internal/logging"
 	intermediary "github.com/Kaese72/device-store/internal/models/intermediary"
-	"github.com/Kaese72/device-store/internal/systemerrors"
 	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
+	"github.com/Kaese72/huemie-lib/liberrors"
 	"go.elastic.co/apm/module/apmmongo/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -34,23 +35,23 @@ func (persistence MongoDBDevicePersistence) getDeviceCapabilityCollection() *mon
 	return persistence.mongoClient.Database(persistence.dbName).Collection("deviceCapabilities")
 }
 
-func (persistence MongoDBDevicePersistence) FilterDevices(ctx context.Context) ([]devicestoretemplates.Device, systemerrors.SystemError) {
+func (persistence MongoDBDevicePersistence) FilterDevices(ctx context.Context) ([]devicestoretemplates.Device, error) {
 	// FIXME Implement capability modification
 	attrHandle := persistence.getDeviceAttributeCollection()
 	rDeviceAttributes := []models.MongoDeviceAttribute{}
 	results, err := attrHandle.Find(ctx, bson.D{})
 	if err != nil {
-		return nil, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	err = results.All(ctx, &rDeviceAttributes)
 	if err != nil {
 		logging.Error("Error encountered while decoding devices", ctx, map[string]interface{}{"error": err.Error()})
-		return nil, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	apiDevices, err := models.CreateAPIDevicesFromAttributes(rDeviceAttributes)
 	if err != nil {
 		logging.Error("Error encountered while converting mongo devices", ctx, map[string]interface{}{"error": err.Error()})
-		return nil, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 
 	responseDevices := []devicestoretemplates.Device{}
@@ -60,24 +61,24 @@ func (persistence MongoDBDevicePersistence) FilterDevices(ctx context.Context) (
 	return responseDevices, nil
 }
 
-func (persistence MongoDBDevicePersistence) GetDeviceByIdentifier(identifier string, expandCapabilities bool, ctx context.Context) (devicestoretemplates.Device, systemerrors.SystemError) {
+func (persistence MongoDBDevicePersistence) GetDeviceByIdentifier(identifier string, expandCapabilities bool, ctx context.Context) (devicestoretemplates.Device, error) {
 	attrHandle := persistence.getDeviceAttributeCollection()
 	deviceAttributes := []models.MongoDeviceAttribute{}
 	// FIXME Deconding here is broken
 	cursor, err := attrHandle.Find(ctx, bson.D{primitive.E{Key: "deviceId", Value: identifier}})
 	if err != nil {
 		logging.Info(err.Error(), ctx)
-		return devicestoretemplates.Device{}, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return devicestoretemplates.Device{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	err = cursor.All(ctx, &deviceAttributes)
 	if err != nil {
 		logging.Info(err.Error(), ctx)
-		return devicestoretemplates.Device{}, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return devicestoretemplates.Device{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	rDevice, err := models.ConvertAttributesToAPIDevice(deviceAttributes)
 	if err != nil {
 		logging.Info(err.Error(), ctx)
-		return devicestoretemplates.Device{}, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return devicestoretemplates.Device{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	if expandCapabilities {
 		capHandle := persistence.getDeviceCapabilityCollection()
@@ -86,12 +87,12 @@ func (persistence MongoDBDevicePersistence) GetDeviceByIdentifier(identifier str
 		cursor, err := capHandle.Find(ctx, bson.D{primitive.E{Key: "deviceId", Value: identifier}})
 		if err != nil {
 			logging.Info(err.Error(), ctx)
-			return devicestoretemplates.Device{}, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+			return devicestoretemplates.Device{}, liberrors.NewApiError(liberrors.InternalError, err)
 		}
 		err = cursor.All(ctx, &deviceCapabilities)
 		if err != nil {
 			logging.Info(err.Error(), ctx)
-			return devicestoretemplates.Device{}, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+			return devicestoretemplates.Device{}, liberrors.NewApiError(liberrors.InternalError, err)
 		}
 		logging.Info("Found capabilities for device", ctx, map[string]interface{}{"identifier": identifier, "nCap": strconv.Itoa(len(deviceCapabilities))})
 		deviceCapabilities = models.ReduceToMostRelevantCapabilities(deviceCapabilities)
@@ -104,9 +105,9 @@ func (persistence MongoDBDevicePersistence) GetDeviceByIdentifier(identifier str
 	return rDevice, nil
 }
 
-func (persistence MongoDBDevicePersistence) UpdateDeviceAttributes(apiDevice devicestoretemplates.Device, returnResult bool, ctx context.Context) (devicestoretemplates.Device, systemerrors.SystemError) {
+func (persistence MongoDBDevicePersistence) UpdateDeviceAttributes(apiDevice devicestoretemplates.Device, returnResult bool, ctx context.Context) (devicestoretemplates.Device, error) {
 	if len(apiDevice.Identifier) == 0 {
-		return devicestoretemplates.Device{}, systemerrors.WrapSystemError(errors.New("can not update device without ID"), systemerrors.NotFound)
+		return devicestoretemplates.Device{}, liberrors.NewApiError(liberrors.NotFound, errors.New("can not update device without ID"))
 	}
 	attrHandle := persistence.getDeviceAttributeCollection()
 	//FIXME updates
@@ -125,11 +126,11 @@ func (persistence MongoDBDevicePersistence) UpdateDeviceAttributes(apiDevice dev
 	}
 }
 
-func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilities(apiDevice devicestoretemplates.Device, sourceBridge string, ctx context.Context) (devicestoretemplates.Device, systemerrors.SystemError) {
+func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilities(apiDevice devicestoretemplates.Device, sourceBridge string, ctx context.Context) (devicestoretemplates.Device, error) {
 	_, err := persistence.UpdateDeviceAttributes(apiDevice, false, ctx)
 	if err != nil {
 		logging.Info(err.Error(), ctx)
-		return devicestoretemplates.Device{}, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return devicestoretemplates.Device{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	mongoCapabilities := models.ExtractCapabilityModelsFromAPIDeviceModel(apiDevice, sourceBridge)
 	capHandle := persistence.getDeviceCapabilityCollection()
@@ -143,22 +144,22 @@ func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilitie
 	return persistence.GetDeviceByIdentifier(apiDevice.Identifier, true, ctx)
 }
 
-func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capName string, ctx context.Context) (intermediary.CapabilityIntermediary, systemerrors.SystemError) {
+func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capName string, ctx context.Context) (intermediary.CapabilityIntermediary, error) {
 	logging.Info("Fetching capability", ctx, map[string]interface{}{"deviceId": deviceId, "capabilityName": capName})
 	capHandle := persistence.getDeviceCapabilityCollection()
 	rCapabilities := []models.MongoDeviceCapability{}
 	cursor, err := capHandle.Find(ctx, bson.D{primitive.E{Key: "deviceId", Value: deviceId}, primitive.E{Key: "capabilityName", Value: capName}}, options.Find().SetLimit(1), options.Find().SetSort(bson.D{{Key: "lastSeen", Value: -1}}))
 	if err != nil {
 		logging.Info(err.Error(), ctx)
-		return intermediary.CapabilityIntermediary{}, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return intermediary.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	err = cursor.All(ctx, &rCapabilities)
 	if err != nil {
 		logging.Info(err.Error(), ctx)
-		return intermediary.CapabilityIntermediary{}, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return intermediary.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	if len(rCapabilities) != 1 {
-		return intermediary.CapabilityIntermediary{}, systemerrors.WrapSystemError(fmt.Errorf("unexpected amount of capabilities found, %d != 1", len(rCapabilities)), systemerrors.NotFound)
+		return intermediary.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.NotFound, fmt.Errorf("could not find device capability", len(rCapabilities)))
 	}
 	return intermediary.CapabilityIntermediary{
 		DeviceId:            rCapabilities[0].DeviceId,
@@ -168,14 +169,14 @@ func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capNa
 	}, nil
 }
 
-func NewMongoDBDevicePersistence(conf config.MongoDBConfig) (DevicePersistenceDB, systemerrors.SystemError) {
+func NewMongoDBDevicePersistence(conf config.MongoDBConfig) (DevicePersistenceDB, error) {
 	mongoClient, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(conf.ConnectionString).SetMonitor(apmmongo.CommandMonitor()))
 	if err != nil {
-		return nil, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 
 	if err := mongoClient.Ping(context.TODO(), nil); err != nil {
-		return nil, systemerrors.WrapSystemError(err, systemerrors.InternalError)
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 
 	// FIXME Verify connection successful

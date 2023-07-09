@@ -2,23 +2,23 @@ package database
 
 import (
 	"context"
-	"errors"
+
+	"github.com/pkg/errors"
 
 	"github.com/Kaese72/device-store/internal/config"
 	models "github.com/Kaese72/device-store/internal/models/intermediary"
-	"github.com/Kaese72/device-store/internal/systemerrors"
 	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 )
 
 type DevicePersistenceDB interface {
 	// Device Control
-	FilterDevices(context.Context) ([]devicestoretemplates.Device, systemerrors.SystemError)
-	GetDeviceByIdentifier(string, bool, context.Context) (devicestoretemplates.Device, systemerrors.SystemError)
+	FilterDevices(context.Context) ([]devicestoretemplates.Device, error)
+	GetDeviceByIdentifier(string, bool, context.Context) (devicestoretemplates.Device, error)
 	//// Attributes
-	UpdateDeviceAttributes(devicestoretemplates.Device, bool, context.Context) (devicestoretemplates.Device, systemerrors.SystemError)
+	UpdateDeviceAttributes(devicestoretemplates.Device, bool, context.Context) (devicestoretemplates.Device, error)
 	//// Capabilities
-	UpdateDeviceAttributesAndCapabilities(devicestoretemplates.Device, string, context.Context) (devicestoretemplates.Device, systemerrors.SystemError)
-	GetCapability(string, string, context.Context) (models.CapabilityIntermediary, systemerrors.SystemError)
+	UpdateDeviceAttributesAndCapabilities(devicestoretemplates.Device, string, context.Context) (devicestoretemplates.Device, error)
+	GetCapability(string, string, context.Context) (models.CapabilityIntermediary, error)
 }
 
 func NewDevicePersistenceDB(conf config.DatabaseConfig) (DevicePersistenceDB, error) {

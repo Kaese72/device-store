@@ -11,9 +11,10 @@ import (
 	"github.com/Kaese72/device-store/internal/adapters"
 	"github.com/Kaese72/device-store/internal/database"
 	"github.com/Kaese72/device-store/internal/logging"
-	"github.com/Kaese72/device-store/internal/systemerrors"
 	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
+	"github.com/Kaese72/huemie-lib/liberrors"
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 	"go.elastic.co/apm/module/apmgorilla/v2"
 )
 
@@ -21,25 +22,30 @@ type apiModelError struct {
 	Message string `json:"message"`
 }
 
-func serveHTTPError(err systemerrors.SystemError, ctx context.Context, writer http.ResponseWriter) {
-	if err.Reason() <= 599 && err.Reason() >= 500 {
+func serveHTTPError(err error, ctx context.Context, writer http.ResponseWriter) {
+	var apiError *liberrors.ApiError
+	if !errors.As(err, &apiError) {
+		apiError = liberrors.NewApiError(liberrors.InternalError, errors.New("unknown internal error occured"))
+	}
+
+	if apiError.Reason <= 599 && apiError.Reason >= 500 {
 		// Internal server error, log error
-		logging.Error(err.Error(), ctx)
+		logging.ErrorErr(err, ctx)
 	} else {
 		// For everything else, log an info. This may be excessive, but it only happens on errors
-		logging.Info(err.Error(), ctx)
+		logging.ErrorErr(err, ctx)
 	}
 	// Safe to ignore error here... kind of but not really
-	resp, err2 := json.Marshal(apiModelError{Message: err.Error()})
-	if err2 != nil {
-		logging.Error(err2.Error(), ctx)
+	resp, err := json.Marshal(apiModelError{Message: err.Error()})
+	if err != nil {
+		logging.ErrorErr(errors.Wrap(err, "failed to marshal error message"), ctx)
 		return
 	}
 
-	writer.WriteHeader(err.Reason())
-	_, err2 = writer.Write(resp)
-	if err2 != nil {
-		logging.Error(err2.Error(), ctx)
+	writer.WriteHeader(int(apiError.Reason))
+	_, err = writer.Write(resp)
+	if err != nil {
+		logging.ErrorErr(errors.Wrap(err, "failed to write error message"), ctx)
 	}
 }
 
@@ -58,9 +64,9 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 			return
 		}
 
-		jsonEncoded, err2 := json.MarshalIndent(devices, "", "   ")
-		if err2 != nil {
-			serveHTTPError(systemerrors.WrapSystemError(err2, systemerrors.InternalError), ctx, writer)
+		jsonEncoded, err := json.MarshalIndent(devices, "", "   ")
+		if err != nil {
+			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 			return
 		}
 
@@ -74,7 +80,7 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 		var rDevice devicestoretemplates.Device
 		err := json.NewDecoder(reader.Body).Decode(&device)
 		if err != nil {
-			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.UserError), ctx, writer)
+			serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
 			return
 		}
 		if len(device.Capabilities) > 0 {
@@ -84,25 +90,25 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 			}
 			_, err := attendant.GetAdapter(bridgeKey, ctx)
 			if err != nil {
-				serveHTTPError(systemerrors.WrapSystemError(fmt.Errorf("could not get adapter, '%s'", err.Error()), systemerrors.NotFound), ctx, writer)
+				serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 				return
 			}
 			rDevice, err = persistence.UpdateDeviceAttributesAndCapabilities(device, string(bridgeKey), ctx)
 			if err != nil {
-				serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
+				serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 				return
 			}
 		} else {
 			rDevice, err = persistence.UpdateDeviceAttributes(device, true, ctx)
 			if err != nil {
-				serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
+				serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 				return
 			}
 		}
 
 		jsonEncoded, err := json.MarshalIndent(rDevice, "", "   ")
 		if err != nil {
-			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
+			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 			return
 		}
 
@@ -121,9 +127,9 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 			return
 		}
 
-		jsonEncoded, err2 := json.MarshalIndent(device, "", "   ")
-		if err2 != nil {
-			serveHTTPError(systemerrors.WrapSystemError(err2, systemerrors.InternalError), ctx, writer)
+		jsonEncoded, err := json.MarshalIndent(device, "", "   ")
+		if err != nil {
+			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 			return
 		}
 
@@ -143,7 +149,7 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 				capArg = devicestoretemplates.CapabilityArgs{}
 
 			} else {
-				serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.UserError), ctx, writer)
+				serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
 				return
 			}
 
@@ -152,13 +158,13 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 		logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%s'", capabilityID, deviceID), ctx)
 		capability, err := persistence.GetCapability(deviceID, capabilityID, ctx)
 		if err != nil {
-			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
+			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 			return
 		}
 
 		adapter, err := attendant.GetAdapter(string(capability.CapabilityBridgeKey), ctx)
 		if err != nil {
-			serveHTTPError(systemerrors.WrapSystemError(err, systemerrors.InternalError), ctx, writer)
+			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 			return
 		}
 		sysErr := adapters.TriggerDeviceCapability(ctx, adapter, deviceID, capabilityID, capArg)
