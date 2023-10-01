@@ -34,6 +34,16 @@ func (persistence MongoDBDevicePersistence) getDeviceCapabilityCollection() *mon
 	return persistence.mongoClient.Database(persistence.dbName).Collection("deviceCapabilities")
 }
 
+func (persistence MongoDBDevicePersistence) getGroupCapabilityCollection() *mongo.Collection {
+	// TODO Make configurable, at least the database name
+	return persistence.mongoClient.Database(persistence.dbName).Collection("bridgeGroupCapabilities")
+}
+
+func (persistence MongoDBDevicePersistence) getGroupCollection() *mongo.Collection {
+	// TODO Make configurable, at least the database name
+	return persistence.mongoClient.Database(persistence.dbName).Collection("bridgeGroups")
+}
+
 func (persistence MongoDBDevicePersistence) FilterDevices(ctx context.Context) ([]devicestoretemplates.Device, error) {
 	// FIXME Implement capability modification
 	attrHandle := persistence.getDeviceAttributeCollection()
@@ -166,6 +176,119 @@ func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capNa
 		CapabilityBridgeKey: rCapabilities[0].CapabilityBridgeKey,
 		LastSeen:            rCapabilities[0].LastSeen,
 	}, nil
+}
+
+func (persistence MongoDBDevicePersistence) FilterGroups(ctx context.Context) ([]devicestoretemplates.Group, error) {
+	// FIXME Implement capability modification
+	gHandle := persistence.getGroupCollection()
+	dbGroups := []models.MongoGroup{}
+	results, err := gHandle.Find(ctx, bson.D{})
+	if err != nil {
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	err = results.All(ctx, &dbGroups)
+	if err != nil {
+		logging.Error("Error encountered while decoding devices", ctx, map[string]interface{}{"error": err.Error()})
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	rGroups := []devicestoretemplates.Group{}
+	for _, model := range dbGroups {
+		rGroups = append(rGroups, model.ConvertToAPI())
+	}
+	return rGroups, nil
+}
+
+func (persistence MongoDBDevicePersistence) GetGroupByIdentifier(groupId string, expandCapabilities bool, ctx context.Context) (devicestoretemplates.Group, error) {
+	groupHandle := persistence.getGroupCollection()
+	rGroups := []models.MongoGroup{}
+	cursor, err := groupHandle.Find(ctx, bson.D{primitive.E{Key: "groupId", Value: groupId}}, options.Find().SetLimit(1), options.Find().SetSort(bson.D{{Key: "lastSeen", Value: -1}}))
+	if err != nil {
+		logging.Error(err.Error(), ctx)
+		return devicestoretemplates.Group{}, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	err = cursor.All(ctx, &rGroups)
+	if err != nil {
+		logging.Error(err.Error(), ctx)
+		return devicestoretemplates.Group{}, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	if len(rGroups) < 1 {
+		logging.Info(err.Error(), ctx)
+		return devicestoretemplates.Group{}, liberrors.NewApiError(liberrors.NotFound, err)
+	}
+	rGroup := devicestoretemplates.Group{
+		Identifier: rGroups[0].GroupId,
+		Name:       rGroups[0].GroupName,
+	}
+	if !expandCapabilities {
+		return rGroup, nil
+	}
+	gCapHandle := persistence.getGroupCollection()
+	cursor, err = gCapHandle.Find(ctx, bson.D{primitive.E{Key: "groupId", Value: groupId}}, options.Find(), options.Find().SetSort(bson.D{{Key: "lastSeen", Value: -1}}))
+	if err != nil {
+		logging.Error(err.Error(), ctx)
+		return devicestoretemplates.Group{}, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	rCapabilities := []models.MongoGroupCapability{}
+	err = cursor.All(ctx, &rCapabilities)
+	if err != nil {
+		logging.Error(err.Error(), ctx)
+		return devicestoretemplates.Group{}, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	rGroup.Capabilities = map[devicestoretemplates.CapabilityKey]devicestoretemplates.Capability{}
+	for _, capability := range rCapabilities {
+		rGroup.Capabilities[devicestoretemplates.CapabilityKey(capability.CapabilityName)] = devicestoretemplates.Capability{
+			LastSeen: capability.LastSeen,
+		}
+	}
+	return rGroup, nil
+}
+
+func (persistence MongoDBDevicePersistence) GetGroupCapability(groupId string, capName string, ctx context.Context) (intermediary.GroupCapabilityIntermediary, error) {
+	gCapHandle := persistence.getGroupCapabilityCollection()
+	gCaps := []intermediary.GroupCapabilityIntermediary{}
+	cursor, err := gCapHandle.Find(ctx, bson.D{primitive.E{Key: "groupId", Value: groupId}, primitive.E{Key: "capabilityName", Value: capName}}, options.Find(), options.Find().SetSort(bson.D{{Key: "lastSeen", Value: -1}}))
+	if err != nil {
+		logging.Error(err.Error(), ctx)
+		return intermediary.GroupCapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	err = cursor.All(ctx, &gCaps)
+	if err != nil {
+		logging.Error(err.Error(), ctx)
+		return intermediary.GroupCapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	if len(gCaps) < 1 {
+		logging.Info(err.Error(), ctx)
+		return intermediary.GroupCapabilityIntermediary{}, liberrors.NewApiError(liberrors.NotFound, err)
+	}
+	return gCaps[0], nil
+}
+
+func (persistence MongoDBDevicePersistence) updateGroupCapability(capability models.MongoGroupCapability, ctx context.Context) error {
+	if capability.GroupId == "" {
+		return liberrors.NewApiError(liberrors.UserError, errors.New("must supply group id when updating group capabilities"))
+	}
+	if capability.CapabilityName == "" {
+		return liberrors.NewApiError(liberrors.UserError, errors.New("must supply capability name when updating group capabilities"))
+	}
+	gCapHandle := persistence.getGroupCapabilityCollection()
+	gCapHandle.FindOneAndUpdate(ctx, bson.D{primitive.E{Key: "groupId", Value: capability.GroupId}, primitive.E{Key: "capabilityName", Value: capability.CapabilityName}}, capability.ConvertToUpdate(), options.FindOneAndUpdate().SetUpsert(true))
+	// FIXME error handling
+	return nil
+}
+
+func (persistence MongoDBDevicePersistence) UpdateGroup(group devicestoretemplates.Group, sourceBridge string, ctx context.Context) (devicestoretemplates.Group, error) {
+	if group.Identifier == "" {
+		return devicestoretemplates.Group{}, liberrors.NewApiError(liberrors.NotFound, errors.New("can not update device without ID"))
+	}
+	gHandle := persistence.getGroupCollection()
+	dbGroup := models.MongoGroupFromAPIModel(group, sourceBridge)
+	gHandle.FindOneAndUpdate(ctx, bson.D{primitive.E{Key: "groupId", Value: group.Identifier}}, dbGroup.ConvertToUpdate(), options.FindOneAndUpdate().SetUpsert(true))
+	for _, capability := range models.ExtractGroupCapabilityFromAPI(group, sourceBridge) {
+		if err := persistence.updateGroupCapability(capability, ctx); err != nil {
+			return devicestoretemplates.Group{}, err
+		}
+	}
+	return devicestoretemplates.Group{}, nil
 }
 
 func NewMongoDBDevicePersistence(conf config.MongoDBConfig) (DevicePersistenceDB, error) {
