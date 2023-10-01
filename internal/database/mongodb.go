@@ -245,7 +245,7 @@ func (persistence MongoDBDevicePersistence) GetGroupByIdentifier(groupId string,
 
 func (persistence MongoDBDevicePersistence) GetGroupCapability(groupId string, capName string, ctx context.Context) (intermediary.GroupCapabilityIntermediary, error) {
 	gCapHandle := persistence.getGroupCapabilityCollection()
-	gCaps := []intermediary.GroupCapabilityIntermediary{}
+	gCaps := []models.MongoGroupCapability{}
 	cursor, err := gCapHandle.Find(ctx, bson.D{primitive.E{Key: "groupId", Value: groupId}, primitive.E{Key: "capabilityName", Value: capName}}, options.Find(), options.Find().SetSort(bson.D{{Key: "lastSeen", Value: -1}}))
 	if err != nil {
 		logging.Error(err.Error(), ctx)
@@ -260,7 +260,12 @@ func (persistence MongoDBDevicePersistence) GetGroupCapability(groupId string, c
 		logging.Info(err.Error(), ctx)
 		return intermediary.GroupCapabilityIntermediary{}, liberrors.NewApiError(liberrors.NotFound, err)
 	}
-	return gCaps[0], nil
+	return intermediary.GroupCapabilityIntermediary{
+		GroupId:             gCaps[0].GroupId,
+		CapabilityName:      gCaps[0].CapabilityName,
+		CapabilityBridgeKey: gCaps[0].GroupBridgeKey,
+		LastSeen:            gCaps[0].LastSeen,
+	}, nil
 }
 
 func (persistence MongoDBDevicePersistence) updateGroupCapability(capability models.MongoGroupCapability, ctx context.Context) error {
