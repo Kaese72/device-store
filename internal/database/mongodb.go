@@ -222,7 +222,7 @@ func (persistence MongoDBDevicePersistence) GetGroupByIdentifier(groupId string,
 	if !expandCapabilities {
 		return rGroup, nil
 	}
-	gCapHandle := persistence.getGroupCollection()
+	gCapHandle := persistence.getGroupCapabilityCollection()
 	cursor, err = gCapHandle.Find(ctx, bson.D{primitive.E{Key: "groupId", Value: groupId}}, options.Find(), options.Find().SetSort(bson.D{{Key: "lastSeen", Value: -1}}))
 	if err != nil {
 		logging.Error(err.Error(), ctx)
