@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/Kaese72/device-store/gql"
 	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/config"
 	"github.com/Kaese72/device-store/internal/database"
@@ -21,5 +22,6 @@ func main() {
 	}
 	adapterAttendant := adapterattendant.NewAdapterAttendant(config.Loaded.AdapterAttendant)
 	logging.Info("Successfully contacted database", context.Background())
+	gql.GraphQLListenAndServe(persistence)
 	server.PersistenceAPIListenAndServe(persistence, adapterAttendant)
 }
