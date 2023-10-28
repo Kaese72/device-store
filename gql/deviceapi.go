@@ -104,7 +104,7 @@ func GraphQLListenAndServe(router *mux.Router, persistence gqlpersistenceinterfa
 	router.Handle("/", handler.New(&handler.Config{
 		Schema:   &schema,
 		Pretty:   true,
-		GraphiQL: false,
+		GraphiQL: true,
 	}))
 	return nil
 }
