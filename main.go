@@ -29,19 +29,19 @@ func main() {
 	router := mux.NewRouter()
 	apmgorilla.Instrument(router)
 
-	restRouter, err := server.PersistenceAPIListenAndServe(persistence, adapterAttendant)
+	restRouter := router.PathPrefix("/device-store/").Subrouter()
+	err = server.PersistenceAPIListenAndServe(restRouter, persistence, adapterAttendant)
 	if err != nil {
 		logging.Error(err.Error(), context.TODO())
 		return
 	}
-	router.Handle("/device-store/", restRouter)
 
-	gqlRouter, err := gql.GraphQLListenAndServe(persistence)
+	gqlRouter := router.PathPrefix("/device-store-gql/").Subrouter()
+	err = gql.GraphQLListenAndServe(gqlRouter, persistence)
 	if err != nil {
 		logging.Error(err.Error(), context.TODO())
 		return
 	}
-	router.Handle("/device-store-gql/", gqlRouter)
 
 	server := &http.Server{
 		Handler: router,

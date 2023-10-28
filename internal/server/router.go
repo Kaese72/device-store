@@ -48,9 +48,7 @@ func serveHTTPError(err error, ctx context.Context, writer http.ResponseWriter) 
 	}
 }
 
-func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, attendant adapterattendant.Attendant) (*mux.Router, error) {
-	router := mux.NewRouter()
-
+func PersistenceAPIListenAndServe(router *mux.Router, persistence database.DevicePersistenceDB, attendant adapterattendant.Attendant) error {
 	apiv0 := router.PathPrefix("/v0/").Subrouter()
 
 	apiv0.HandleFunc("/devices", func(writer http.ResponseWriter, reader *http.Request) {
@@ -277,6 +275,6 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 
 	}).Methods("POST")
 
-	return router, nil
+	return nil
 
 }

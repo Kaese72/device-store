@@ -6,6 +6,7 @@ import (
 
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/rest/models"
+	"github.com/gorilla/mux"
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/handler"
 )
@@ -25,7 +26,7 @@ func deviceFromIntermediary(mDevice models.Device) gDevice {
 	}
 }
 
-func GraphQLListenAndServe(persistence gqlpersistenceinterface) (*handler.Handler, error) {
+func GraphQLListenAndServe(router *mux.Router, persistence gqlpersistenceinterface) error {
 	device := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Device",
 		Fields: graphql.Fields{
@@ -97,11 +98,13 @@ func GraphQLListenAndServe(persistence gqlpersistenceinterface) (*handler.Handle
 		Query: rootQuery,
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return handler.New(&handler.Config{
+
+	router.Handle("/", handler.New(&handler.Config{
 		Schema:   &schema,
 		Pretty:   true,
 		GraphiQL: false,
-	}), nil
+	}))
+	return nil
 }
