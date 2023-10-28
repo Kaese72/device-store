@@ -76,7 +76,7 @@ func GraphQLListenAndServe(router *mux.Router, persistence gqlpersistenceinterfa
 				},
 			},
 			"deviceList": &graphql.Field{
-				Type:        device,
+				Type:        graphql.NewList(device),
 				Description: "List of devices",
 				Resolve: func(params graphql.ResolveParams) (interface{}, error) {
 					mDevices, err := persistence.FilterDevices(context.TODO())
