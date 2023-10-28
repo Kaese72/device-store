@@ -15,7 +15,6 @@ import (
 	"github.com/Kaese72/huemie-lib/liberrors"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"go.elastic.co/apm/module/apmgorilla/v2"
 )
 
 type apiModelError struct {
@@ -49,12 +48,10 @@ func serveHTTPError(err error, ctx context.Context, writer http.ResponseWriter) 
 	}
 }
 
-func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, attendant adapterattendant.Attendant) error {
+func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, attendant adapterattendant.Attendant) (*mux.Router, error) {
 	router := mux.NewRouter()
-	apmgorilla.Instrument(router)
 
-	//Everything else (not /auth/login) should have the authentication middleware
-	apiv0 := router.PathPrefix("/device-store/v0/").Subrouter()
+	apiv0 := router.PathPrefix("/v0/").Subrouter()
 
 	apiv0.HandleFunc("/devices", func(writer http.ResponseWriter, reader *http.Request) {
 		ctx := reader.Context()
@@ -280,16 +277,6 @@ func PersistenceAPIListenAndServe(persistence database.DevicePersistenceDB, atte
 
 	}).Methods("POST")
 
-	server := &http.Server{
-		Handler: router,
-		Addr:    "0.0.0.0:8080",
-	}
-
-	if err := server.ListenAndServe(); err != nil {
-		logging.Error(err.Error(), context.TODO())
-		return err
-	}
-
-	return nil
+	return router, nil
 
 }

@@ -3,7 +3,6 @@ package gql
 import (
 	"context"
 	"errors"
-	"net/http"
 
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/rest/models"
@@ -26,7 +25,7 @@ func deviceFromIntermediary(mDevice models.Device) gDevice {
 	}
 }
 
-func GraphQLListenAndServe(persistence gqlpersistenceinterface) error {
+func GraphQLListenAndServe(persistence gqlpersistenceinterface) (*handler.Handler, error) {
 	device := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Device",
 		Fields: graphql.Fields{
@@ -98,19 +97,11 @@ func GraphQLListenAndServe(persistence gqlpersistenceinterface) error {
 		Query: rootQuery,
 	})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	server := &http.Server{
-		Handler: handler.New(&handler.Config{
-			Schema:   &schema,
-			Pretty:   true,
-			GraphiQL: false,
-		}),
-		Addr: "0.0.0.0:8081",
-	}
-	err = server.ListenAndServe()
-	if err != nil {
-		logging.Error(err.Error(), context.TODO())
-	}
-	return err
+	return handler.New(&handler.Config{
+		Schema:   &schema,
+		Pretty:   true,
+		GraphiQL: false,
+	}), nil
 }

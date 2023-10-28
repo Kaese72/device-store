@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 
 	"github.com/Kaese72/device-store/gql"
@@ -10,6 +11,8 @@ import (
 	"github.com/Kaese72/device-store/internal/database"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/server"
+	"github.com/gorilla/mux"
+	"go.elastic.co/apm/module/apmgorilla"
 )
 
 func main() {
@@ -22,6 +25,32 @@ func main() {
 	}
 	adapterAttendant := adapterattendant.NewAdapterAttendant(config.Loaded.AdapterAttendant)
 	logging.Info("Successfully contacted database", context.Background())
-	gql.GraphQLListenAndServe(persistence)
-	server.PersistenceAPIListenAndServe(persistence, adapterAttendant)
+
+	router := mux.NewRouter()
+	apmgorilla.Instrument(router)
+
+	restRouter, err := server.PersistenceAPIListenAndServe(persistence, adapterAttendant)
+	if err != nil {
+		logging.Error(err.Error(), context.TODO())
+		return
+	}
+	router.Handle("/device-store/", restRouter)
+
+	gqlRouter, err := gql.GraphQLListenAndServe(persistence)
+	if err != nil {
+		logging.Error(err.Error(), context.TODO())
+		return
+	}
+	router.Handle("/device-store-gql/", gqlRouter)
+
+	server := &http.Server{
+		Handler: router,
+		Addr:    "0.0.0.0:8080",
+	}
+
+	if err := server.ListenAndServe(); err != nil {
+		logging.Error(err.Error(), context.TODO())
+		return
+	}
+
 }
