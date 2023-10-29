@@ -22,5 +22,6 @@ func (device MongoDevice) UniqueBridgeQuery() bson.D {
 }
 
 func UniqueDeviceStoreQuery(deviceStoreIdentifier string) bson.D {
-	return bson.D{primitive.E{Key: "_id", Value: deviceStoreIdentifier}}
+	objID, _ := primitive.ObjectIDFromHex(deviceStoreIdentifier)
+	return bson.D{primitive.E{Key: "_id", Value: objID}}
 }
