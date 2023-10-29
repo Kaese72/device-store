@@ -82,10 +82,10 @@ func PersistenceAPIListenAndServe(router *mux.Router, persistence database.Devic
 
 	}).Methods("POST")
 
-	apiv0.HandleFunc("/devices/{deviceID}/capabilities/{capabilityID}", func(writer http.ResponseWriter, reader *http.Request) {
+	apiv0.HandleFunc("/devices/{storeDeviceIdentifier}/capabilities/{capabilityID}", func(writer http.ResponseWriter, reader *http.Request) {
 		ctx := reader.Context()
 		vars := mux.Vars(reader)
-		deviceID := vars["deviceID"]
+		storeDeviceIdentifier := vars["storeDeviceIdentifier"]
 		capabilityID := vars["capabilityID"]
 		capArg := devicestoretemplates.CapabilityArgs{}
 		err := json.NewDecoder(reader.Body).Decode(&capArg)
@@ -100,8 +100,8 @@ func PersistenceAPIListenAndServe(router *mux.Router, persistence database.Devic
 
 		}
 
-		logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%s'", capabilityID, deviceID), ctx)
-		capability, err := persistence.GetCapability(deviceID, capabilityID, ctx)
+		logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%s'", capabilityID, storeDeviceIdentifier), ctx)
+		capability, err := persistence.GetCapability(storeDeviceIdentifier, capabilityID, ctx)
 		if err != nil {
 			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 			return
@@ -112,7 +112,7 @@ func PersistenceAPIListenAndServe(router *mux.Router, persistence database.Devic
 			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 			return
 		}
-		sysErr := adapters.TriggerDeviceCapability(ctx, adapter, deviceID, capabilityID, capArg)
+		sysErr := adapters.TriggerDeviceCapability(ctx, adapter, capability.BridgeDeviceIdentifier, capabilityID, capArg)
 		if err != nil {
 			serveHTTPError(sysErr, ctx, writer)
 			return

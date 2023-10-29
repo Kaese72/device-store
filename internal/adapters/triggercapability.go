@@ -19,7 +19,7 @@ import (
 
 var tracingClient = apmhttp.WrapClient(http.DefaultClient)
 
-func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, deviceID string, capabilityID string, capArg models.CapabilityArgs) error {
+func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, bridgeDeviceIdentifier string, capabilityID string, capArg models.CapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)
 	if err != nil {
 		return liberrors.NewApiError(liberrors.UserError, err)
@@ -30,7 +30,7 @@ func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels
 		return liberrors.NewApiError(liberrors.InternalError, err)
 	}
 
-	adapterURL.Path = fmt.Sprintf("devices/%s/capabilities/%s", deviceID, capabilityID)
+	adapterURL.Path = fmt.Sprintf("devices/%s/capabilities/%s", bridgeDeviceIdentifier, capabilityID)
 	logging.Info("Triggering capability", ctx, map[string]interface{}{"capUri": adapterURL.String()})
 	resp, err := ctxhttp.Post(ctx, tracingClient, adapterURL.String(), "application/json", bytes.NewBuffer(jsonEncoded))
 	if err != nil {
@@ -38,9 +38,13 @@ func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels
 		// We should log it or incorporate it in the response message or something
 		return liberrors.NewApiError(liberrors.InternalError, err)
 	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		logging.Info("Capability failed to trigger", ctx, map[string]interface{}{"rCode": strconv.Itoa(resp.StatusCode)})
+		return liberrors.NewApiError(liberrors.InternalError, fmt.Errorf("not HTTP/200, %d", resp.StatusCode))
+	}
 	// It is the callers responsibility to Close the body reader
 	// But there should not be anything of interest here at the moment
-	defer resp.Body.Close()
 	logging.Info("Capability triggered", ctx, map[string]interface{}{"rCode": strconv.Itoa(resp.StatusCode)})
 	return nil
 }
