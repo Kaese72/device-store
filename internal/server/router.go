@@ -157,7 +157,7 @@ func PersistenceAPIListenAndServe(router *mux.Router, persistence database.Devic
 			return
 		}
 
-		adapter, err := attendant.GetAdapter(string(capability.CapabilityBridgeKey), ctx)
+		adapter, err := attendant.GetAdapter(string(capability.BridgeKey), ctx)
 		if err != nil {
 			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 			return

@@ -1,11 +1,11 @@
-package models
+package intermediaries
 
 import (
 	"time"
 )
 
-type CapabilityIntermediary struct {
-	DeviceId            string
+type GroupCapabilityIntermediary struct {
+	GroupId             string
 	CapabilityName      string
 	CapabilityBridgeKey string
 	LastSeen            time.Time

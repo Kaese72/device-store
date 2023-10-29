@@ -9,7 +9,7 @@ import (
 	"github.com/Kaese72/device-store/internal/config"
 	"github.com/Kaese72/device-store/internal/database/models"
 	"github.com/Kaese72/device-store/internal/logging"
-	intermediary "github.com/Kaese72/device-store/internal/models/intermediary"
+	"github.com/Kaese72/device-store/internal/models/intermediaries"
 	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 	"github.com/Kaese72/huemie-lib/liberrors"
 	"go.elastic.co/apm/module/apmmongo/v2"
@@ -114,6 +114,35 @@ func (persistence MongoDBDevicePersistence) GetDeviceByIdentifier(identifier str
 	return rDevice, nil
 }
 
+func (persistence MongoDBDevicePersistence) GetDeviceAttributes(deviceIdentifier string, ctx context.Context) ([]intermediaries.AttributeIntermediary, error) {
+	attrHandle := persistence.getDeviceAttributeCollection()
+	deviceAttributes := []models.MongoDeviceAttribute{}
+	// FIXME Deconding here is broken
+	cursor, err := attrHandle.Find(ctx, bson.D{primitive.E{Key: "deviceId", Value: deviceIdentifier}})
+	if err != nil {
+		logging.Info(err.Error(), ctx)
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	err = cursor.All(ctx, &deviceAttributes)
+	if err != nil {
+		logging.Info(err.Error(), ctx)
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	results := []intermediaries.AttributeIntermediary{}
+	for _, attribute := range deviceAttributes {
+		results = append(results, intermediaries.AttributeIntermediary{
+			DeviceId: deviceIdentifier,
+			Name:     attribute.AttributeName,
+			State: intermediaries.AttributeStateIntermediary{
+				Boolean: attribute.AttributeState.Boolean,
+				Numeric: attribute.AttributeState.Numeric,
+				Text:    attribute.AttributeState.Text,
+			},
+		})
+	}
+	return results, nil
+}
+
 func (persistence MongoDBDevicePersistence) UpdateDeviceAttributes(apiDevice devicestoretemplates.Device, returnResult bool, ctx context.Context) (devicestoretemplates.Device, error) {
 	if len(apiDevice.Identifier) == 0 {
 		return devicestoretemplates.Device{}, liberrors.NewApiError(liberrors.NotFound, errors.New("can not update device without ID"))
@@ -153,29 +182,57 @@ func (persistence MongoDBDevicePersistence) UpdateDeviceAttributesAndCapabilitie
 	return persistence.GetDeviceByIdentifier(apiDevice.Identifier, true, ctx)
 }
 
-func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capName string, ctx context.Context) (intermediary.CapabilityIntermediary, error) {
+func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capName string, ctx context.Context) (intermediaries.CapabilityIntermediary, error) {
 	logging.Info("Fetching capability", ctx, map[string]interface{}{"deviceId": deviceId, "capabilityName": capName})
 	capHandle := persistence.getDeviceCapabilityCollection()
 	rCapabilities := []models.MongoDeviceCapability{}
 	cursor, err := capHandle.Find(ctx, bson.D{primitive.E{Key: "deviceId", Value: deviceId}, primitive.E{Key: "capabilityName", Value: capName}}, options.Find().SetLimit(1), options.Find().SetSort(bson.D{{Key: "lastSeen", Value: -1}}))
 	if err != nil {
 		logging.Info(err.Error(), ctx)
-		return intermediary.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
+		return intermediaries.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	err = cursor.All(ctx, &rCapabilities)
 	if err != nil {
 		logging.Info(err.Error(), ctx)
-		return intermediary.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
+		return intermediaries.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	if len(rCapabilities) != 1 {
-		return intermediary.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.NotFound, errors.New("could not find device capability"))
+		return intermediaries.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.NotFound, errors.New("could not find device capability"))
 	}
-	return intermediary.CapabilityIntermediary{
-		DeviceId:            rCapabilities[0].DeviceId,
-		CapabilityName:      rCapabilities[0].CapabilityName,
-		CapabilityBridgeKey: rCapabilities[0].CapabilityBridgeKey,
-		LastSeen:            rCapabilities[0].LastSeen,
+	return intermediaries.CapabilityIntermediary{
+		DeviceId:  rCapabilities[0].DeviceId,
+		Name:      rCapabilities[0].CapabilityName,
+		BridgeKey: rCapabilities[0].CapabilityBridgeKey,
+		LastSeen:  rCapabilities[0].LastSeen,
 	}, nil
+}
+
+func (persistence MongoDBDevicePersistence) GetDeviceCapabilities(deviceId string, ctx context.Context) ([]intermediaries.CapabilityIntermediary, error) {
+	capHandle := persistence.getDeviceCapabilityCollection()
+	deviceCapabilities := []models.MongoDeviceCapability{}
+	// FIXME Deconding here is broken
+	cursor, err := capHandle.Find(ctx, bson.D{primitive.E{Key: "deviceId", Value: deviceId}})
+	if err != nil {
+		logging.Info(err.Error(), ctx)
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	err = cursor.All(ctx, &deviceCapabilities)
+	if err != nil {
+		logging.Info(err.Error(), ctx)
+		return nil, liberrors.NewApiError(liberrors.InternalError, err)
+	}
+	logging.Info("Found capabilities for device", ctx, map[string]interface{}{"identifier": deviceId, "nCap": strconv.Itoa(len(deviceCapabilities))})
+
+	rCapabilities := []intermediaries.CapabilityIntermediary{}
+	for _, capability := range deviceCapabilities {
+		rCapabilities = append(rCapabilities, intermediaries.CapabilityIntermediary{
+			DeviceId:  capability.DeviceId,
+			Name:      capability.CapabilityName,
+			BridgeKey: capability.CapabilityBridgeKey,
+			LastSeen:  capability.LastSeen,
+		})
+	}
+	return rCapabilities, nil
 }
 
 func (persistence MongoDBDevicePersistence) FilterGroups(ctx context.Context) ([]devicestoretemplates.Group, error) {
@@ -243,24 +300,24 @@ func (persistence MongoDBDevicePersistence) GetGroupByIdentifier(groupId string,
 	return rGroup, nil
 }
 
-func (persistence MongoDBDevicePersistence) GetGroupCapability(groupId string, capName string, ctx context.Context) (intermediary.GroupCapabilityIntermediary, error) {
+func (persistence MongoDBDevicePersistence) GetGroupCapability(groupId string, capName string, ctx context.Context) (intermediaries.GroupCapabilityIntermediary, error) {
 	gCapHandle := persistence.getGroupCapabilityCollection()
 	gCaps := []models.MongoGroupCapability{}
 	cursor, err := gCapHandle.Find(ctx, bson.D{primitive.E{Key: "groupId", Value: groupId}, primitive.E{Key: "capabilityName", Value: capName}}, options.Find(), options.Find().SetSort(bson.D{{Key: "lastSeen", Value: -1}}))
 	if err != nil {
 		logging.Error(err.Error(), ctx)
-		return intermediary.GroupCapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
+		return intermediaries.GroupCapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	err = cursor.All(ctx, &gCaps)
 	if err != nil {
 		logging.Error(err.Error(), ctx)
-		return intermediary.GroupCapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
+		return intermediaries.GroupCapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	if len(gCaps) < 1 {
 		logging.Info(err.Error(), ctx)
-		return intermediary.GroupCapabilityIntermediary{}, liberrors.NewApiError(liberrors.NotFound, err)
+		return intermediaries.GroupCapabilityIntermediary{}, liberrors.NewApiError(liberrors.NotFound, err)
 	}
-	return intermediary.GroupCapabilityIntermediary{
+	return intermediaries.GroupCapabilityIntermediary{
 		GroupId:             gCaps[0].GroupId,
 		CapabilityName:      gCaps[0].CapabilityName,
 		CapabilityBridgeKey: gCaps[0].GroupBridgeKey,

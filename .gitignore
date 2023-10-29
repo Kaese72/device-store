@@ -1,3 +1,5 @@
 99_local
 config.used.yaml
 device-store-api
+env.ps
+device-store.exe

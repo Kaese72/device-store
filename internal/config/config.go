@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"os"
 	"strings"
 
@@ -92,11 +93,11 @@ func init() {
 	viper.BindEnv("logging.http.url")
 	err := viper.Unmarshal(&Loaded)
 	if err != nil {
-		logging.Error(err.Error(), nil)
+		logging.Error(err.Error(), context.TODO())
 		os.Exit(1)
 	}
 	if err := Loaded.Validate(); err != nil {
-		logging.Error(err.Error(), nil)
+		logging.Error(err.Error(), context.TODO())
 		os.Exit(1)
 	}
 }
