@@ -25,6 +25,7 @@ func (conf MongoDBConfig) Validate() error {
 
 type DatabaseConfig struct {
 	MongoDB MongoDBConfig `json:"mongodb" mapstructure:"mongodb"`
+	Purge   bool          `json:"purge" mapstructure:"purge"`
 }
 
 func (conf DatabaseConfig) Validate() error {
@@ -49,6 +50,7 @@ func (conf AdapterAttendantConfig) Validate() error {
 type Config struct {
 	Database         DatabaseConfig         `json:"database" mapstructure:"database"`
 	AdapterAttendant AdapterAttendantConfig `json:"adapter-attendant" mapstructure:"adapter-attendant"`
+	PurgeDB          bool                   `json:"purge-db"`
 }
 
 func (conf *Config) PopulateExample() {
@@ -83,6 +85,8 @@ func init() {
 	viper.BindEnv("database.mongodb.connection-string")
 	viper.BindEnv("database.mongodb.db-name")
 	viper.SetDefault("database.mongodb.db-name", "huemie")
+	viper.BindEnv("database.purge")
+	viper.SetDefault("database.purge", false)
 
 	// # Device attendant
 	viper.BindEnv("adapter-attendant.url")
@@ -91,6 +95,7 @@ func init() {
 	viper.BindEnv("logging.stdout")
 	viper.SetDefault("logging.stdout", true)
 	viper.BindEnv("logging.http.url")
+
 	err := viper.Unmarshal(&Loaded)
 	if err != nil {
 		logging.Error(err.Error(), context.TODO())

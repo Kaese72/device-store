@@ -3,9 +3,9 @@ package models
 import devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 
 type AttributeState struct {
-	Boolean *bool    `bson:"boolean-state"`
-	Numeric *float32 `bson:"numeric-state"`
-	Text    *string  `bson:"string-state"`
+	Boolean *bool    `bson:"booleanState"`
+	Numeric *float32 `bson:"numericState"`
+	Text    *string  `bson:"stringState"`
 }
 
 func (attr AttributeState) ConvertToAPIAttributeState() devicestoretemplates.AttributeState {

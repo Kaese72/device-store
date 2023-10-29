@@ -1,42 +1,26 @@
 package models
 
 import (
-	"github.com/pkg/errors"
-
-	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-func ConvertAttributesToAPIDevice(singleDeviceAttributes []MongoDeviceAttribute) (devicestoretemplates.Device, error) {
-	// This assumes all attributes and capabilities belong to the same device
-	if len(singleDeviceAttributes) == 0 {
-		return devicestoretemplates.Device{}, errors.New("singleDeviceAttributes is empty")
-	}
-	deviceId := singleDeviceAttributes[0].DeviceId
-	device := devicestoretemplates.Device{
-		Identifier: deviceId,
-		Attributes: map[devicestoretemplates.AttributeKey]devicestoretemplates.AttributeState{},
-	}
-	for _, attribute := range singleDeviceAttributes {
-		if attribute.DeviceId != deviceId {
-			return device, errors.New("deviceIds do not match")
-		}
-		device.Attributes[devicestoretemplates.AttributeKey(attribute.AttributeName)] = attribute.AttributeState.ConvertToAPIAttributeState()
-	}
-	return device, nil
+type MongoDevice struct {
+	BridgeIdentifier      string `bson:"bridgeIdentifier"` // The identifier of this device from the bridge perspective
+	BridgeKey             string `bson:"bridgeKey"`        // The "key" of the bridge owning this device
+	DeviceStoreIdentifier string `bson:"_id,omitempty"`    // Should never be directly set. Generated on first insert and then never touched again
 }
 
-func CreateAPIDevicesFromAttributes(mutipleDeviceAttributes []MongoDeviceAttribute) (map[string]devicestoretemplates.Device, error) {
-	perDeviceAttributes := map[string][]MongoDeviceAttribute{}
-	var err error
-	for _, deviceAttribute := range mutipleDeviceAttributes {
-		perDeviceAttributes[deviceAttribute.DeviceId] = append(perDeviceAttributes[deviceAttribute.DeviceId], deviceAttribute)
+func (device MongoDevice) ConvertToUpdate() bson.M {
+	return bson.M{
+		"$set": device,
 	}
-	apiDevices := map[string]devicestoretemplates.Device{}
-	for deviceId, attributes := range perDeviceAttributes {
-		apiDevices[deviceId], err = ConvertAttributesToAPIDevice(attributes)
-		if err != nil {
-			return apiDevices, err
-		}
-	}
-	return apiDevices, nil
+}
+
+func (device MongoDevice) UniqueBridgeQuery() bson.D {
+	return bson.D{primitive.E{Key: "bridgeIdentifier", Value: device.BridgeIdentifier}, primitive.E{Key: "bridgeKey", Value: device.BridgeKey}}
+}
+
+func UniqueDeviceStoreQuery(deviceStoreIdentifier string) bson.D {
+	return bson.D{primitive.E{Key: "_id", Value: deviceStoreIdentifier}}
 }

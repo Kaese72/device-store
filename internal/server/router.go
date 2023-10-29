@@ -53,84 +53,34 @@ func PersistenceAPIListenAndServe(router *mux.Router, persistence database.Devic
 
 	apiv0.HandleFunc("/devices", func(writer http.ResponseWriter, reader *http.Request) {
 		ctx := reader.Context()
-		devices, err := persistence.FilterDevices(ctx)
-		if err != nil {
-			serveHTTPError(err, ctx, writer)
-			return
-		}
-
-		jsonEncoded, err := json.MarshalIndent(devices, "", "   ")
-		if err != nil {
-			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-			return
-		}
-
-		writer.Write(jsonEncoded)
-	}).Methods("GET")
-
-	apiv0.HandleFunc("/devices", func(writer http.ResponseWriter, reader *http.Request) {
-		ctx := reader.Context()
 		bridgeKey := reader.Header.Get("Bridge-Key")
+		if bridgeKey == "" {
+			http.Error(writer, "May not update devices when not identifying as an adapter", http.StatusBadRequest)
+			return
+		}
 		device := devicestoretemplates.Device{}
-		var rDevice devicestoretemplates.Device
 		err := json.NewDecoder(reader.Body).Decode(&device)
 		if err != nil {
 			serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
 			return
 		}
-		if len(device.Capabilities) > 0 {
-			if bridgeKey == "" {
-				http.Error(writer, "May not set capabilities when not identifying as an adapter", http.StatusBadRequest)
-				return
-			}
-			_, err := attendant.GetAdapter(bridgeKey, ctx)
-			if err != nil {
-				serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-				return
-			}
-			rDevice, err = persistence.UpdateDeviceAttributesAndCapabilities(device, string(bridgeKey), ctx)
-			if err != nil {
-				serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-				return
-			}
-		} else {
-			rDevice, err = persistence.UpdateDeviceAttributes(device, true, ctx)
-			if err != nil {
-				serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-				return
-			}
-		}
+		// We do not trust the client that much. Override the bridgeKey
+		device.BridgeKey = bridgeKey
 
-		jsonEncoded, err := json.MarshalIndent(rDevice, "", "   ")
+		_, err = attendant.GetAdapter(bridgeKey, ctx)
+		if err != nil {
+			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
+			return
+		}
+		err = persistence.UpdateDevice(device, string(bridgeKey), ctx)
 		if err != nil {
 			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 			return
 		}
 
-		writer.Write(jsonEncoded)
+		writer.WriteHeader(http.StatusOK)
 
 	}).Methods("POST")
-
-	apiv0.HandleFunc("/devices/{deviceID}", func(writer http.ResponseWriter, reader *http.Request) {
-		ctx := reader.Context()
-		vars := mux.Vars(reader)
-		deviceID := vars["deviceID"]
-		logging.Info(fmt.Sprintf("Getting device with identifier '%s'", deviceID), ctx)
-		device, err := persistence.GetDeviceByIdentifier(deviceID, true, ctx)
-		if err != nil {
-			serveHTTPError(err, ctx, writer)
-			return
-		}
-
-		jsonEncoded, err := json.MarshalIndent(device, "", "   ")
-		if err != nil {
-			serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-			return
-		}
-
-		writer.Write(jsonEncoded)
-
-	}).Methods("GET")
 
 	apiv0.HandleFunc("/devices/{deviceID}/capabilities/{capabilityID}", func(writer http.ResponseWriter, reader *http.Request) {
 		ctx := reader.Context()

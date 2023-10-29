@@ -8,19 +8,22 @@ import (
 	"github.com/Kaese72/device-store/internal/database"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/models/intermediaries"
-	"github.com/Kaese72/device-store/rest/models"
 	"github.com/gorilla/mux"
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/handler"
 )
 
 type gDevice struct {
-	Identifier string `json:"identifier"`
+	BridgeIdentifier string `json:"bridgeIdentifier"`
+	BridgeKey        string `json:"bridgeKey"`
+	StoreIdentifier  string `json:"storeIdentifier"`
 }
 
-func deviceFromIntermediary(mDevice models.Device) gDevice {
+func deviceFromIntermediary(mDevice intermediaries.DeviceIntermediary) gDevice {
 	return gDevice{
-		Identifier: mDevice.Identifier,
+		BridgeIdentifier: mDevice.BridgeIdentifier,
+		BridgeKey:        mDevice.BridgeKey,
+		StoreIdentifier:  mDevice.DeviceStoreIdentifier,
 	}
 }
 
@@ -41,7 +44,6 @@ func attributeFromIntermediary(mAttribute intermediaries.AttributeIntermediary) 
 }
 
 type gCapability struct {
-	DeviceId  string    `json:"deviceId"`
 	Name      string    `json:"name"`
 	BridgeKey string    `json:"bridgeKey"`
 	LastSeen  time.Time `json:"lastSeen"`
@@ -49,7 +51,6 @@ type gCapability struct {
 
 func capabilityFromIntermediary(mCapability intermediaries.CapabilityIntermediary) gCapability {
 	return gCapability{
-		DeviceId:  mCapability.DeviceId,
 		Name:      mCapability.Name,
 		BridgeKey: mCapability.BridgeKey,
 		LastSeen:  mCapability.LastSeen,
@@ -78,11 +79,8 @@ func GraphQLListenAndServe(router *mux.Router, persistence database.DevicePersis
 	capability := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Capability",
 		Fields: graphql.Fields{
-			"deviceId": &graphql.Field{
-				Type: graphql.String,
-			},
 			"name": &graphql.Field{
-				Type: graphql.Boolean,
+				Type: graphql.String,
 			},
 			"bridgeKey": &graphql.Field{
 				Type: graphql.String,
@@ -96,7 +94,13 @@ func GraphQLListenAndServe(router *mux.Router, persistence database.DevicePersis
 	device := graphql.NewObject(graphql.ObjectConfig{
 		Name: "Device",
 		Fields: graphql.Fields{
-			"identifier": &graphql.Field{
+			"bridgeIdentifier": &graphql.Field{
+				Type: graphql.String,
+			},
+			"bridgeKey": &graphql.Field{
+				Type: graphql.String,
+			},
+			"storeIdentifier": &graphql.Field{
 				Type: graphql.String,
 			},
 			"attributes": &graphql.Field{
@@ -107,7 +111,7 @@ func GraphQLListenAndServe(router *mux.Router, persistence database.DevicePersis
 					if !ok {
 						return nil, errors.New("could not translate source")
 					}
-					iAttributes, err := persistence.GetDeviceAttributes(sDevice.Identifier, context.TODO())
+					iAttributes, err := persistence.GetDeviceAttributes(sDevice.StoreIdentifier, context.TODO())
 					if err != nil {
 						return nil, err
 					}
@@ -126,7 +130,7 @@ func GraphQLListenAndServe(router *mux.Router, persistence database.DevicePersis
 					if !ok {
 						return nil, errors.New("could not translate source")
 					}
-					iCapabilities, err := persistence.GetDeviceCapabilities(sDevice.Identifier, context.TODO())
+					iCapabilities, err := persistence.GetDeviceCapabilities(sDevice.StoreIdentifier, context.TODO())
 					if err != nil {
 						return nil, err
 					}
@@ -147,16 +151,16 @@ func GraphQLListenAndServe(router *mux.Router, persistence database.DevicePersis
 				Type:        device,
 				Description: "A single device",
 				Args: graphql.FieldConfigArgument{
-					"identifier": &graphql.ArgumentConfig{
+					"storeIdentifier": &graphql.ArgumentConfig{
 						Type: graphql.String,
 					},
 				},
 				Resolve: func(params graphql.ResolveParams) (interface{}, error) {
-					identifierQuery, ok := params.Args["identifier"].(string)
+					storeIdentifier, ok := params.Args["storeIdentifier"].(string)
 					if !ok {
 						return nil, errors.New("must supply identifier query parameter")
 					}
-					mDevice, err := persistence.GetDeviceByIdentifier(identifierQuery, false, context.TODO())
+					mDevice, err := persistence.GetStoreDevice(storeIdentifier, false, context.TODO())
 					if err != nil {
 						logging.Error(err.Error(), context.TODO())
 						return nil, err
@@ -168,7 +172,7 @@ func GraphQLListenAndServe(router *mux.Router, persistence database.DevicePersis
 				Type:        graphql.NewList(device),
 				Description: "List of devices",
 				Resolve: func(params graphql.ResolveParams) (interface{}, error) {
-					mDevices, err := persistence.FilterDevices(context.TODO())
+					mDevices, err := persistence.GetDevices(context.TODO())
 					if err != nil {
 						logging.Error(err.Error(), context.TODO())
 						return nil, err

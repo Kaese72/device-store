@@ -23,6 +23,7 @@ func main() {
 		logging.Error(err.Error(), context.Background())
 		os.Exit(1)
 	}
+
 	adapterAttendant := adapterattendant.NewAdapterAttendant(config.Loaded.AdapterAttendant)
 	logging.Info("Successfully contacted database", context.Background())
 
@@ -52,5 +53,4 @@ func main() {
 		logging.Error(err.Error(), context.TODO())
 		return
 	}
-
 }

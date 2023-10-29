@@ -7,7 +7,7 @@ type AttributeStateIntermediary struct {
 }
 
 type AttributeIntermediary struct {
-	DeviceId string
-	Name     string
-	State    AttributeStateIntermediary
+	DeviceStoreIdentifier string
+	Name                  string
+	State                 AttributeStateIntermediary
 }

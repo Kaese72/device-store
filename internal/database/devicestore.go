@@ -12,13 +12,12 @@ import (
 
 type DevicePersistenceDB interface {
 	// Device Control
-	FilterDevices(context.Context) ([]devicestoretemplates.Device, error)
-	GetDeviceByIdentifier(string, bool, context.Context) (devicestoretemplates.Device, error)
+	GetDevices(context.Context) ([]intermediaries.DeviceIntermediary, error)
+	GetStoreDevice(string, bool, context.Context) (intermediaries.DeviceIntermediary, error)
 	//// Attributes
 	GetDeviceAttributes(string, context.Context) ([]intermediaries.AttributeIntermediary, error)
-	UpdateDeviceAttributes(devicestoretemplates.Device, bool, context.Context) (devicestoretemplates.Device, error)
 	//// Capabilities
-	UpdateDeviceAttributesAndCapabilities(devicestoretemplates.Device, string, context.Context) (devicestoretemplates.Device, error)
+	UpdateDevice(devicestoretemplates.Device, string, context.Context) error
 	GetCapability(deviceId string, capName string, ctx context.Context) (intermediaries.CapabilityIntermediary, error)
 	GetDeviceCapabilities(deviceId string, ctx context.Context) ([]intermediaries.CapabilityIntermediary, error)
 	//// Groups
@@ -30,7 +29,17 @@ type DevicePersistenceDB interface {
 
 func NewDevicePersistenceDB(conf config.DatabaseConfig) (DevicePersistenceDB, error) {
 	if conf.MongoDB.Validate() == nil {
-		return NewMongoDBDevicePersistence(conf.MongoDB)
+		db, err := NewMongoDBDevicePersistence(conf.MongoDB)
+		if err != nil {
+			return db, err
+		}
+		if conf.Purge {
+			err := db.purge()
+			if err != nil {
+				return db, err
+			}
+		}
+		return db, err
 
 	} else {
 		return nil, errors.New("no applicable database backend provided")

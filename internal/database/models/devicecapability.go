@@ -5,13 +5,14 @@ import (
 
 	devicestoretemplates "github.com/Kaese72/device-store/rest/models"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type MongoDeviceCapability struct {
-	DeviceId            string    `bson:"deviceId"`
-	CapabilityName      string    `bson:"capabilityName"`
-	CapabilityBridgeKey string    `bson:"capabilityBridgeKey"`
-	LastSeen            time.Time `bson:"lastSeen"`
+	DeviceStoreIdentifier string    `bson:"storeDeviceIdentifier,omitempty"` // The device this attribute belongs to
+	Name                  string    `bson:"name"`
+	BridgeKey             string    `bson:"bridgeKey"`
+	LastSeen              time.Time `bson:"lastSeen"`
 }
 
 func (capability MongoDeviceCapability) ConvertToAPICapability() devicestoretemplates.Capability {
@@ -23,9 +24,9 @@ func (capability MongoDeviceCapability) ConvertToAPICapability() devicestoretemp
 func (capability MongoDeviceCapability) ConvertToUpdate() bson.M {
 	return bson.M{
 		"$set": map[string]string{
-			"deviceId":            capability.DeviceId,
-			"capabilityName":      capability.CapabilityName,
-			"capabilityBridgeKey": string(capability.CapabilityBridgeKey),
+			"storeDeviceIdentifier": capability.DeviceStoreIdentifier,
+			"name":                  capability.Name,
+			"bridgeKey":             string(capability.BridgeKey),
 		},
 		"$currentDate": bson.M{
 			"lastSeen": bson.M{"$type": "timestamp"},
@@ -33,29 +34,26 @@ func (capability MongoDeviceCapability) ConvertToUpdate() bson.M {
 	}
 }
 
-func ExtractCapabilityModelsFromAPIDeviceModel(device devicestoretemplates.Device, bridgeKey string) []MongoDeviceCapability {
+func (capability MongoDeviceCapability) UniqueQuery() bson.D {
+	return MongoDeviceCapabilityUniqueQuery(capability.DeviceStoreIdentifier, capability.Name)
+}
+
+func MongoDeviceCapabilityUniqueQuery(identifier string, name string) bson.D {
+	x := bson.D{primitive.E{Key: "storeDeviceIdentifier", Value: identifier}}
+	if name != "" {
+		x = append(x, primitive.E{Key: "name", Value: name})
+	}
+	return x
+}
+
+func ExtractCapabilityModelsFromAPIDeviceModel(device devicestoretemplates.Device, deviceStoreIdentifier string, bridgeKey string) []MongoDeviceCapability {
 	capabilities := []MongoDeviceCapability{}
 	for capabilityKey := range device.Capabilities {
 		capabilities = append(capabilities, MongoDeviceCapability{
-			DeviceId:            device.Identifier,
-			CapabilityName:      string(capabilityKey),
-			CapabilityBridgeKey: bridgeKey,
+			DeviceStoreIdentifier: deviceStoreIdentifier,
+			Name:                  string(capabilityKey),
+			BridgeKey:             bridgeKey,
 		})
 	}
 	return capabilities
-}
-
-func ReduceToMostRelevantCapabilities(capabilities []MongoDeviceCapability) []MongoDeviceCapability {
-	// Assumes all passed in capabilities belong to the same device
-	capMap := map[string]MongoDeviceCapability{}
-	for _, capability := range capabilities {
-		if capability.LastSeen.After(capMap[capability.CapabilityName].LastSeen) {
-			capMap[capability.CapabilityName] = capability
-		}
-	}
-	ret := []MongoDeviceCapability{}
-	for _, capability := range capMap {
-		ret = append(ret, capability)
-	}
-	return ret
 }
