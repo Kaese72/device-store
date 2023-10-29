@@ -246,10 +246,11 @@ func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capNa
 		return intermediaries.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	return intermediaries.CapabilityIntermediary{
-		StoreDeviceIdentifier: rCapability.StoreDeviceIdentifier,
-		Name:                  rCapability.Name,
-		BridgeKey:             rCapability.BridgeKey,
-		LastSeen:              rCapability.LastSeen,
+		StoreDeviceIdentifier:  rCapability.StoreDeviceIdentifier,
+		BridgeDeviceIdentifier: rCapability.BridgeDeviceIdentifier,
+		Name:                   rCapability.Name,
+		BridgeKey:              rCapability.BridgeKey,
+		LastSeen:               rCapability.LastSeen,
 	}, nil
 }
 

@@ -113,7 +113,7 @@ func PersistenceAPIListenAndServe(router *mux.Router, persistence database.Devic
 			return
 		}
 		sysErr := adapters.TriggerDeviceCapability(ctx, adapter, capability.BridgeDeviceIdentifier, capabilityID, capArg)
-		if err != nil {
+		if sysErr != nil {
 			serveHTTPError(sysErr, ctx, writer)
 			return
 		}
