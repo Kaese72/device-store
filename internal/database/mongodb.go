@@ -227,7 +227,7 @@ func (persistence MongoDBDevicePersistence) UpdateDevice(apiDevice devicestorete
 	mongoCapabilities := models.ExtractCapabilityModelsFromAPIDeviceModel(apiDevice, mongoDevice.DeviceStoreIdentifier, bridgeKey)
 	capHandle := persistence.getDeviceCapabilityCollection()
 	for _, capability := range mongoCapabilities {
-		logging.Info("Updating capability", ctx, map[string]interface{}{"DeviceStoreIdentifier": capability.DeviceStoreIdentifier, "name": capability.Name})
+		logging.Info("Updating capability", ctx, map[string]interface{}{"DeviceStoreIdentifier": capability.StoreDeviceIdentifier, "name": capability.Name})
 		err := capHandle.FindOneAndUpdate(ctx, capability.UniqueQuery(), capability.ConvertToUpdate(), options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)).Err()
 		if err != nil {
 			return liberrors.NewApiError(liberrors.NotFound, errors.New("Could not update capability"))
@@ -246,10 +246,10 @@ func (persistence MongoDBDevicePersistence) GetCapability(deviceId string, capNa
 		return intermediaries.CapabilityIntermediary{}, liberrors.NewApiError(liberrors.InternalError, err)
 	}
 	return intermediaries.CapabilityIntermediary{
-		DeviceId:  rCapability.DeviceStoreIdentifier,
-		Name:      rCapability.Name,
-		BridgeKey: rCapability.BridgeKey,
-		LastSeen:  rCapability.LastSeen,
+		StoreDeviceIdentifier: rCapability.StoreDeviceIdentifier,
+		Name:                  rCapability.Name,
+		BridgeKey:             rCapability.BridgeKey,
+		LastSeen:              rCapability.LastSeen,
 	}, nil
 }
 
@@ -272,10 +272,11 @@ func (persistence MongoDBDevicePersistence) GetDeviceCapabilities(deviceId strin
 	rCapabilities := []intermediaries.CapabilityIntermediary{}
 	for _, capability := range deviceCapabilities {
 		rCapabilities = append(rCapabilities, intermediaries.CapabilityIntermediary{
-			DeviceId:  capability.DeviceStoreIdentifier,
-			Name:      capability.Name,
-			BridgeKey: capability.BridgeKey,
-			LastSeen:  capability.LastSeen,
+			StoreDeviceIdentifier:  capability.StoreDeviceIdentifier,
+			BridgeDeviceIdentifier: capability.BridgeDeviceIdentifier,
+			BridgeKey:              capability.BridgeKey,
+			Name:                   capability.Name,
+			LastSeen:               capability.LastSeen,
 		})
 	}
 	return rCapabilities, nil

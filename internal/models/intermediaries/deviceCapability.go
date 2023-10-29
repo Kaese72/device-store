@@ -5,8 +5,9 @@ import (
 )
 
 type CapabilityIntermediary struct {
-	DeviceId  string
-	Name      string
-	BridgeKey string
-	LastSeen  time.Time
+	StoreDeviceIdentifier  string
+	BridgeDeviceIdentifier string
+	BridgeKey              string
+	Name                   string
+	LastSeen               time.Time
 }
