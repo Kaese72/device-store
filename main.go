@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/Kaese72/device-store/gql"
 	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/config"
 	"github.com/Kaese72/device-store/internal/database"
@@ -32,13 +31,6 @@ func main() {
 
 	restRouter := router.PathPrefix("/device-store/").Subrouter()
 	err = server.PersistenceAPIListenAndServe(restRouter, persistence, adapterAttendant)
-	if err != nil {
-		logging.Error(err.Error(), context.TODO())
-		return
-	}
-
-	gqlRouter := router.PathPrefix("/device-store-gql/").Subrouter()
-	err = gql.GraphQLListenAndServe(gqlRouter, persistence)
 	if err != nil {
 		logging.Error(err.Error(), context.TODO())
 		return

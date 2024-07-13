@@ -6,8 +6,6 @@ require (
 	github.com/Kaese72/adapter-attendant v0.0.9
 	github.com/Kaese72/huemie-lib v0.0.4
 	github.com/gorilla/mux v1.8.0
-	github.com/graphql-go/graphql v0.8.1
-	github.com/graphql-go/handler v0.2.3
 	github.com/klauspost/compress v1.16.6 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/pkg/errors v0.9.1
