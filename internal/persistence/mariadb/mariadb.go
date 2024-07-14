@@ -34,8 +34,8 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context) ([]interme
 		"id",
 		"bridgeIdentifier",
 		"bridgeKey",
-		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"boolean\", booleanValue, \"numeric\", numericValue, \"text\", textValue)), JSON_ARRAY()) FROM deviceAttributes INNER JOIN devices ON deviceAttributes.deviceId = devices.id) as attributes",
-		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceCapabilities INNER JOIN devices ON deviceCapabilities.deviceId = devices.id) as capabilities",
+		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"boolean\", booleanValue, \"numeric\", numericValue, \"text\", textValue)), JSON_ARRAY()) FROM deviceAttributes WHERE deviceAttributes.deviceId = devices.id) as attributes",
+		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceCapabilities WHERE deviceId = devices.id) as capabilities",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM devices`
 	devices := []intermediaries.DeviceIntermediary{}
