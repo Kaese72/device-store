@@ -11,29 +11,19 @@ import (
 	"github.com/spf13/viper"
 )
 
-type MongoDBConfig struct {
-	ConnectionString string `json:"connection-string" mapstructure:"connection-string"`
-	DbName           string `json:"db-name" mapstructure:"db-name"`
-}
-
-func (conf MongoDBConfig) Validate() error {
-	if len(conf.ConnectionString) == 0 {
-		return errors.New("need to supply a mongodb connection string")
-	}
-	return nil
-}
-
 type DatabaseConfig struct {
-	MongoDB MongoDBConfig `json:"mongodb" mapstructure:"mongodb"`
-	Purge   bool          `json:"purge" mapstructure:"purge"`
+	Host     string `json:"host" mapstructure:"host" `
+	Port     int    `json:"port" mapstructure:"port"`
+	User     string `json:"user" mapstructure:"user"`
+	Password string `json:"password" mapstructure:"password"`
+	Database string `json:"database" mapstructure:"database"`
 }
 
 func (conf DatabaseConfig) Validate() error {
-	if conf.MongoDB.Validate() == nil {
-		// MongoDB validation passed, indicating that there is at least one valid config
-		return nil
+	if conf.Host == "" {
+		errors.New("must supply database host")
 	}
-	return errors.New("need to supply at least one database backend")
+	return nil
 }
 
 type AdapterAttendantConfig struct {
@@ -53,17 +43,6 @@ type Config struct {
 	PurgeDB          bool                   `json:"purge-db"`
 }
 
-func (conf *Config) PopulateExample() {
-	conf.Database = DatabaseConfig{
-		MongoDB: MongoDBConfig{
-			ConnectionString: "localhost:27017",
-		},
-	}
-	conf.AdapterAttendant = AdapterAttendantConfig{
-		URL: "http://somehost:8080/rest/v0",
-	}
-}
-
 func (conf Config) Validate() error {
 	if err := conf.Database.Validate(); err != nil {
 		return err
@@ -81,12 +60,16 @@ func init() {
 	// myVip.AutomaticEnv()
 	// Set replaces to allow keys like "database.mongodb.connection-string"
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-	// # Database configuration, if left out, assume no mongo configuration
-	viper.BindEnv("database.mongodb.connection-string")
-	viper.BindEnv("database.mongodb.db-name")
-	viper.SetDefault("database.mongodb.db-name", "huemie")
-	viper.BindEnv("database.purge")
-	viper.SetDefault("database.purge", false)
+	// # Database configuration, if left out.
+	viper.BindEnv("database.host")
+	viper.BindEnv("database.port")
+	viper.BindEnv("database.user")
+	viper.BindEnv("database.password")
+	viper.BindEnv("database.database")
+	viper.SetDefault("database.port", 3306)
+	viper.SetDefault("database.database", "devicestore")
+	viper.BindEnv("purge-db")
+	viper.SetDefault("purge-db", false)
 
 	// # Device attendant
 	viper.BindEnv("adapter-attendant.url")

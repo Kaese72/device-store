@@ -4,3 +4,4 @@ device-store-api
 env.ps
 device-store.exe
 .vscode
+example-device.json

@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/Kaese72/adapter-attendant v0.0.9
 	github.com/Kaese72/huemie-lib v0.0.4
+	github.com/georgysavva/scany v1.2.2
 	github.com/gorilla/mux v1.8.0
 	github.com/klauspost/compress v1.16.6 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect
@@ -14,6 +15,7 @@ require (
 	go.elastic.co/apm/module/apmgorilla v1.15.0
 	go.elastic.co/apm/module/apmhttp/v2 v2.4.3
 	go.elastic.co/apm/module/apmmongo/v2 v2.4.3
+	go.elastic.co/apm/module/apmsql v1.15.0
 	go.elastic.co/apm/v2 v2.4.3
 	go.mongodb.org/mongo-driver v1.12.0
 	golang.org/x/net v0.12.0

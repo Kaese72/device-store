@@ -7,17 +7,18 @@ import (
 
 	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/config"
-	"github.com/Kaese72/device-store/internal/database"
 	"github.com/Kaese72/device-store/internal/logging"
+	"github.com/Kaese72/device-store/internal/persistence"
 	"github.com/Kaese72/device-store/internal/server"
 	"github.com/gorilla/mux"
 	"go.elastic.co/apm/module/apmgorilla"
+	_ "go.elastic.co/apm/module/apmsql/mysql"
 )
 
 func main() {
 	// # Viper configuration
 
-	persistence, err := database.NewDevicePersistenceDB(config.Loaded.Database)
+	persistence, err := persistence.NewDevicePersistenceDB(config.Loaded.Database)
 	if err != nil {
 		logging.Error(err.Error(), context.Background())
 		os.Exit(1)
