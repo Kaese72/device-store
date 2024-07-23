@@ -83,14 +83,14 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device int
 	return nil
 }
 
-func (persistence mariadbPersistence) GetCapabilityForActivation(ctx context.Context, deviceId int, capName string) (intermediaries.CapabilityIntermediaryActivation, error) {
+func (persistence mariadbPersistence) GetCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.CapabilityIntermediaryActivation, error) {
 	capabilities := []intermediaries.CapabilityIntermediaryActivation{}
-	err := sqlscan.Select(ctx, persistence.db, &capabilities, `SELECT bridgeIdentifier, name, bridgeKey FROM deviceCapabilities INNER JOIN devices on deviceCapabilities.deviceId = devices.id WHERE deviceId = ? AND name = ?`, deviceId, capName)
+	err := sqlscan.Select(ctx, persistence.db, &capabilities, `SELECT bridgeIdentifier, name, bridgeKey FROM deviceCapabilities INNER JOIN devices on deviceCapabilities.deviceId = devices.id WHERE deviceId = ? AND name = ?`, storeIdentifier, capabilityName)
 	if err != nil {
 		return intermediaries.CapabilityIntermediaryActivation{}, err
 	}
 	if len(capabilities) == 0 {
-		return intermediaries.CapabilityIntermediaryActivation{}, liberrors.NewApiError(liberrors.NotFound, fmt.Errorf("capability %s not found for device %d", capName, deviceId))
+		return intermediaries.CapabilityIntermediaryActivation{}, liberrors.NewApiError(liberrors.NotFound, fmt.Errorf("capability %s not found for device %d", capabilityName, storeIdentifier))
 	}
 	return capabilities[0], err
 }

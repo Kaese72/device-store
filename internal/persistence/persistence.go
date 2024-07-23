@@ -11,12 +11,10 @@ import (
 type DevicePersistenceDB interface {
 	// Device Control
 	GetDevices(context.Context) ([]intermediaries.DeviceIntermediary, error)
-	//GetStoreDevice(int, bool, context.Context) (intermediaries.DeviceIntermediary, error)
-	//// Attributes
-	//GetDeviceAttributes(string, context.Context) ([]intermediaries.AttributeIntermediary, error)
-	//// Capabilities
 	PostDevice(context.Context, intermediaries.DeviceIntermediary) error
-	GetCapabilityForActivation(ctx context.Context, deviceId int, capName string) (intermediaries.CapabilityIntermediaryActivation, error)
+
+	// Capabilities
+	GetCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.CapabilityIntermediaryActivation, error)
 	//GetDeviceCapabilities(deviceId string, ctx context.Context) ([]intermediaries.CapabilityIntermediary, error)
 	//// Groups
 	//FilterGroups(context.Context) ([]devicestoretemplates.Group, error)
