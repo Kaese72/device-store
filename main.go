@@ -30,12 +30,12 @@ func main() {
 	router := mux.NewRouter()
 	apmgorilla.Instrument(router)
 
-	restRouter := router.PathPrefix("/device-store/").Subrouter()
-	err = server.PersistenceAPIListenAndServe(restRouter, persistence, adapterAttendant)
-	if err != nil {
-		logging.Error(err.Error(), context.TODO())
-		return
-	}
+	restRouter := router.PathPrefix("/device-store/v0/").Subrouter()
+	webapp := server.NewWebApp(persistence, adapterAttendant)
+
+	restRouter.HandleFunc("/devices", webapp.GetDevices).Methods("GET")
+	restRouter.HandleFunc("/devices", webapp.PostDevice).Methods("POST")
+	restRouter.HandleFunc("/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", webapp.TriggerDeviceCapability).Methods("POST")
 
 	server := &http.Server{
 		Handler: router,
