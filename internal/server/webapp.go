@@ -63,7 +63,7 @@ func serveHTTPError(err error, ctx context.Context, writer http.ResponseWriter) 
 // GetDevices returns all devices in the database
 func (app webApp) GetDevices(writer http.ResponseWriter, reader *http.Request) {
 	ctx := reader.Context()
-	intDevices, err := app.persistence.GetDevices(ctx)
+	intDevices, err := app.persistence.GetDevices(ctx, intermediaries.ParseQueryIntoFilters(reader.URL.Query()))
 	if err != nil {
 		serveHTTPError(err, ctx, writer)
 		return

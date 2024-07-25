@@ -16,6 +16,19 @@ type DeviceIntermediary struct {
 	Capabilities CapabilityIntermediaryList `db:"capabilities,omitempty"`
 }
 
+var DeviceFilters = map[string]map[string]func(string) (string, []string){
+	"bridge-identifier": {
+		"eq": func(value string) (string, []string) {
+			return "bridgeIdentifier = ?", []string{value}
+		},
+	},
+	"store-identifier": {
+		"eq": func(value string) (string, []string) {
+			return "id = ?", []string{value}
+		},
+	},
+}
+
 func (d *DeviceIntermediary) ToRestModel() models.Device {
 	return models.Device{
 		BridgeIdentifier: d.BridgeIdentifier,

@@ -29,7 +29,7 @@ func NewMariadbPersistence(conf config.DatabaseConfig) (mariadbPersistence, erro
 	}, nil
 }
 
-func (persistence mariadbPersistence) GetDevices(ctx context.Context) ([]intermediaries.DeviceIntermediary, error) {
+func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []intermediaries.Filter) ([]intermediaries.DeviceIntermediary, error) {
 	fields := []string{
 		"id",
 		"bridgeIdentifier",
@@ -38,8 +38,16 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context) ([]interme
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceCapabilities WHERE deviceId = devices.id) as capabilities",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM devices`
+	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, intermediaries.DeviceFilters)
+	if err != nil {
+		return nil, err
+	}
+	if len(queryFragments) > 0 {
+		query += " WHERE "
+		query += strings.Join(queryFragments, " AND ")
+	}
 	devices := []intermediaries.DeviceIntermediary{}
-	err := sqlscan.Select(ctx, persistence.db, &devices, query)
+	err = sqlscan.Select(ctx, persistence.db, &devices, query, variables...)
 	return devices, err
 }
 

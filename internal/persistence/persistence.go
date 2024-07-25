@@ -10,7 +10,7 @@ import (
 
 type DevicePersistenceDB interface {
 	// Device Control
-	GetDevices(context.Context) ([]intermediaries.DeviceIntermediary, error)
+	GetDevices(context.Context, []intermediaries.Filter) ([]intermediaries.DeviceIntermediary, error)
 	PostDevice(context.Context, intermediaries.DeviceIntermediary) error
 
 	// Capabilities
