@@ -134,7 +134,7 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inter
 	var groupId int
 	if len(foundIds) == 0 {
 		createdIdsList := idList{}
-		result, err := persistence.db.QueryContext(ctx, `INSERT INTO groups (bridgeIdentifier, bridgeKey, name) VALUES (?, ?) RETURNING id`, group.BridgeIdentifier, group.BridgeKey, group.Name)
+		result, err := persistence.db.QueryContext(ctx, `INSERT INTO groups (bridgeIdentifier, bridgeKey, name) VALUES (?, ?, ?) RETURNING id`, group.BridgeIdentifier, group.BridgeKey, group.Name)
 		if err != nil {
 			return err
 		}
@@ -145,6 +145,10 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inter
 		groupId = createdIdsList[0].ID
 	} else {
 		groupId = foundIds[0].ID
+		_, err := persistence.db.QueryContext(ctx, `UPDATE groups SET name = ? WHERE id = ?`, group.Name, groupId)
+		if err != nil {
+			return err
+		}
 	}
 	for _, capability := range group.Capabilities {
 		_, err = persistence.db.ExecContext(ctx, `INSERT IGNORE INTO groupCapabilities (groupId, name) VALUES (?, ?)`, groupId, capability.Name)
