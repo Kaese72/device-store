@@ -11,8 +11,9 @@ type DeviceIntermediary struct {
 	BridgeIdentifier string `db:"bridgeIdentifier"`
 	// "Key" of the owning bridge
 	BridgeKey string `db:"bridgeKey"`
-	// FIXME Database scan likely fails here
-	Attributes   AttributeIntermediaryList        `db:"attributes,omitempty"`
+	// The attributes of the device
+	Attributes AttributeIntermediaryList `db:"attributes,omitempty"`
+	// The capabilities of the device
 	Capabilities DeviceCapabilityIntermediaryList `db:"capabilities,omitempty"`
 }
 

@@ -9,7 +9,9 @@ type GroupIntermediary struct {
 	BridgeIdentifier string `db:"bridgeIdentifier"`
 	// "Key" of the owning bridge
 	BridgeKey string `db:"bridgeKey"`
-	// FIXME Database scan likely fails here
+	// The name of the group
+	Name string `db:"name"`
+	// The capabilities of the group
 	Capabilities GroupCapabilityIntermediaryList `db:"capabilities,omitempty"`
 }
 
@@ -31,15 +33,17 @@ func (d *GroupIntermediary) ToRestModel() models.Group {
 		ID:               d.ID,
 		BridgeIdentifier: d.BridgeIdentifier,
 		BridgeKey:        d.BridgeKey,
+		Name:             d.Name,
 		Capabilities:     d.Capabilities.ToRestModel(),
 	}
 }
 
 func GroupIntermediaryFromRest(device models.Group) GroupIntermediary {
 	return GroupIntermediary{
+		ID:               device.ID,
 		BridgeIdentifier: device.BridgeIdentifier,
 		BridgeKey:        device.BridgeKey,
-		ID:               device.ID,
+		Name:             device.Name,
 		Capabilities:     GroupCapabilityIntermediaryListFromRest(device.Capabilities),
 	}
 }

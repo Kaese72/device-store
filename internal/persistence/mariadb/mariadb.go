@@ -108,6 +108,7 @@ func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []i
 		"id",
 		"bridgeIdentifier",
 		"bridgeKey",
+		"name",
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM groupCapabilities WHERE groupId = groups.id) as capabilities",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM groups`
@@ -133,7 +134,7 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inter
 	var groupId int
 	if len(foundIds) == 0 {
 		createdIdsList := idList{}
-		result, err := persistence.db.QueryContext(ctx, `INSERT INTO groups (bridgeIdentifier, bridgeKey) VALUES (?, ?) RETURNING id`, group.BridgeIdentifier, group.BridgeKey)
+		result, err := persistence.db.QueryContext(ctx, `INSERT INTO groups (bridgeIdentifier, bridgeKey, name) VALUES (?, ?) RETURNING id`, group.BridgeIdentifier, group.BridgeKey, group.Name)
 		if err != nil {
 			return err
 		}
