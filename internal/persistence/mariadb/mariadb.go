@@ -161,7 +161,7 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inter
 
 func (persistence mariadbPersistence) GetGroupCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.GroupCapabilityIntermediaryActivation, error) {
 	capabilities := []intermediaries.GroupCapabilityIntermediaryActivation{}
-	err := sqlscan.Select(ctx, persistence.db, &capabilities, `SELECT bridgeIdentifier, name, bridgeKey FROM groupCapabilities INNER JOIN groups on groupCapabilities.groupId = groups.id WHERE groupId = ? AND name = ?`, storeIdentifier, capabilityName)
+	err := sqlscan.Select(ctx, persistence.db, &capabilities, `SELECT bridgeIdentifier, groupCapabilities.name as name, bridgeKey FROM groupCapabilities INNER JOIN groups on groupCapabilities.groupId = groups.id WHERE groupId = ? AND groupCapabilities.name = ?`, storeIdentifier, capabilityName)
 	if err != nil {
 		return intermediaries.GroupCapabilityIntermediaryActivation{}, err
 	}
