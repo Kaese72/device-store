@@ -122,11 +122,11 @@ func (app webApp) TriggerDeviceCapability(writer http.ResponseWriter, reader *ht
 	// Because of regex above this will never happen
 	storeDeviceIdentifier, _ := strconv.Atoi(vars["storeDeviceIdentifier"])
 	capabilityID := vars["capabilityID"]
-	capArg := models.CapabilityArgs{}
+	capArg := models.DeviceCapabilityArgs{}
 	err := json.NewDecoder(reader.Body).Decode(&capArg)
 	if err != nil {
 		if err == io.EOF {
-			capArg = models.CapabilityArgs{}
+			capArg = models.DeviceCapabilityArgs{}
 
 		} else {
 			serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
@@ -136,7 +136,7 @@ func (app webApp) TriggerDeviceCapability(writer http.ResponseWriter, reader *ht
 	}
 
 	logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%d'", capabilityID, storeDeviceIdentifier), ctx)
-	capability, err := app.persistence.GetCapabilityForActivation(ctx, storeDeviceIdentifier, capabilityID)
+	capability, err := app.persistence.GetDeviceCapabilityForActivation(ctx, storeDeviceIdentifier, capabilityID)
 	if err != nil {
 		serveHTTPError(err, ctx, writer)
 		return
@@ -148,6 +148,93 @@ func (app webApp) TriggerDeviceCapability(writer http.ResponseWriter, reader *ht
 		return
 	}
 	sysErr := adapters.TriggerDeviceCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, capArg)
+	if sysErr != nil {
+		serveHTTPError(sysErr, ctx, writer)
+		return
+	}
+	logging.Info("Capability seemingly successfully triggered", ctx)
+}
+
+func (app webApp) PostGroup(writer http.ResponseWriter, reader *http.Request) {
+	ctx := reader.Context()
+	bridgeKey := reader.Header.Get("Bridge-Key")
+	if bridgeKey == "" {
+		http.Error(writer, "May not update groups when not identifying as a bridge", http.StatusBadRequest)
+		return
+	}
+	group := models.Group{}
+	err := json.NewDecoder(reader.Body).Decode(&group)
+	if err != nil {
+		serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
+		return
+	}
+	// We do not trust the client that much. Override the bridgeKey
+	group.BridgeKey = bridgeKey
+
+	err = app.persistence.PostGroup(ctx, intermediaries.GroupIntermediaryFromRest(group))
+	if err != nil {
+		serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
+		return
+	}
+	writer.WriteHeader(http.StatusOK)
+}
+
+func (app webApp) GetGroups(writer http.ResponseWriter, reader *http.Request) {
+	ctx := reader.Context()
+	intGroups, err := app.persistence.GetGroups(ctx, intermediaries.ParseQueryIntoFilters(reader.URL.Query()))
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+		return
+	}
+	restGroups := make([]models.Group, 0, len(intGroups))
+	for _, group := range intGroups {
+		restGroups = append(restGroups, group.ToRestModel())
+	}
+
+	resp, err := json.Marshal(restGroups)
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+		return
+	}
+
+	writer.WriteHeader(http.StatusOK)
+	_, err = writer.Write(resp)
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+	}
+}
+
+func (app webApp) TriggerGroupCapability(writer http.ResponseWriter, reader *http.Request) {
+	ctx := reader.Context()
+	vars := mux.Vars(reader)
+	storeGroupIdentifier, _ := strconv.Atoi(vars["storeGroupIdentifier"])
+	capabilityID := vars["capabilityID"]
+	capArg := models.DeviceCapabilityArgs{}
+	err := json.NewDecoder(reader.Body).Decode(&capArg)
+	if err != nil {
+		if err == io.EOF {
+			capArg = models.DeviceCapabilityArgs{}
+
+		} else {
+			serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
+			return
+		}
+
+	}
+
+	logging.Info(fmt.Sprintf("Triggering capability '%s' of group '%d'", capabilityID, storeGroupIdentifier), ctx)
+	capability, err := app.persistence.GetGroupCapabilityForActivation(ctx, storeGroupIdentifier, capabilityID)
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+		return
+	}
+
+	adapter, err := app.attendant.GetAdapter(string(capability.BridgeKey), ctx)
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+		return
+	}
+	sysErr := adapters.TriggerGroupCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, capArg)
 	if sysErr != nil {
 		serveHTTPError(sysErr, ctx, writer)
 		return

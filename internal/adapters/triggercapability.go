@@ -19,7 +19,7 @@ import (
 
 var tracingClient = apmhttp.WrapClient(http.DefaultClient)
 
-func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, bridgeDeviceIdentifier string, capabilityID string, capArg models.CapabilityArgs) error {
+func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, bridgeDeviceIdentifier string, capabilityID string, capArg models.DeviceCapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)
 	if err != nil {
 		return liberrors.NewApiError(liberrors.UserError, err)
@@ -49,7 +49,7 @@ func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels
 	return nil
 }
 
-func TriggerGroupCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, groupId string, capabilityId string, capArg models.CapabilityArgs) error {
+func TriggerGroupCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, groupId string, capabilityId string, capArg models.DeviceCapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)
 	if err != nil {
 		return liberrors.NewApiError(liberrors.UserError, err)

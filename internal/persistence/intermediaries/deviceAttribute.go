@@ -8,11 +8,11 @@ import (
 )
 
 type AttributeIntermediary struct {
-	Name     string   `json:"name" db:"name"`
-	DeviceId string   `json:"deviceId" db:"deviceId"`
-	BooleanX *int     `json:"boolean" db:"boolean"`
-	Numeric  *float32 `json:"numeric" db:"numeric"`
-	Text     *string  `json:"text" db:"text"`
+	Name     string   `db:"name"`
+	DeviceId string   `db:"deviceId"`
+	BooleanX *int     `db:"boolean"`
+	Numeric  *float32 `db:"numeric"`
+	Text     *string  `db:"text"`
 }
 
 func (a *AttributeIntermediary) Boolean() *bool {

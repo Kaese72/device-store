@@ -1,10 +1,8 @@
 package intermediaries
 
-import (
-	"github.com/Kaese72/device-store/rest/models"
-)
+import "github.com/Kaese72/device-store/rest/models"
 
-type DeviceIntermediary struct {
+type GroupIntermediary struct {
 	// The device store unique identifier
 	ID int `db:"id,omitempty"`
 	// Identifier from bridge perspective
@@ -12,11 +10,10 @@ type DeviceIntermediary struct {
 	// "Key" of the owning bridge
 	BridgeKey string `db:"bridgeKey"`
 	// FIXME Database scan likely fails here
-	Attributes   AttributeIntermediaryList        `db:"attributes,omitempty"`
-	Capabilities DeviceCapabilityIntermediaryList `db:"capabilities,omitempty"`
+	Capabilities GroupCapabilityIntermediaryList `db:"capabilities,omitempty"`
 }
 
-var DeviceFilters = map[string]map[string]func(string) (string, []string){
+var GroupFilters = map[string]map[string]func(string) (string, []string){
 	"bridge-identifier": {
 		"eq": func(value string) (string, []string) {
 			return "bridgeIdentifier = ?", []string{value}
@@ -29,22 +26,20 @@ var DeviceFilters = map[string]map[string]func(string) (string, []string){
 	},
 }
 
-func (d *DeviceIntermediary) ToRestModel() models.Device {
-	return models.Device{
+func (d *GroupIntermediary) ToRestModel() models.Group {
+	return models.Group{
 		ID:               d.ID,
 		BridgeIdentifier: d.BridgeIdentifier,
 		BridgeKey:        d.BridgeKey,
-		Attributes:       d.Attributes.ToRestModel(),
 		Capabilities:     d.Capabilities.ToRestModel(),
 	}
 }
 
-func DeviceIntermediaryFromRest(device models.Device) DeviceIntermediary {
-	return DeviceIntermediary{
+func GroupIntermediaryFromRest(device models.Group) GroupIntermediary {
+	return GroupIntermediary{
 		BridgeIdentifier: device.BridgeIdentifier,
 		BridgeKey:        device.BridgeKey,
 		ID:               device.ID,
-		Attributes:       AttributeIntermediaryListFromRest(device.Attributes),
-		Capabilities:     DeviceCapabilityIntermediaryListFromRest(device.Capabilities),
+		Capabilities:     GroupCapabilityIntermediaryListFromRest(device.Capabilities),
 	}
 }

@@ -12,15 +12,11 @@ type DevicePersistenceDB interface {
 	// Device Control
 	GetDevices(context.Context, []intermediaries.Filter) ([]intermediaries.DeviceIntermediary, error)
 	PostDevice(context.Context, intermediaries.DeviceIntermediary) error
-
-	// Capabilities
-	GetCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.CapabilityIntermediaryActivation, error)
-	//GetDeviceCapabilities(deviceId string, ctx context.Context) ([]intermediaries.CapabilityIntermediary, error)
+	GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error)
 	//// Groups
-	//FilterGroups(context.Context) ([]devicestoretemplates.Group, error)
-	//GetGroupByIdentifier(groupId string, expandCapabilities bool, ctx context.Context) (devicestoretemplates.Group, error)
-	//GetGroupCapability(groupId string, capName string, ctx context.Context) (intermediaries.GroupCapabilityIntermediary, error)
-	//UpdateGroup(group devicestoretemplates.Group, sourceBridge string, ctx context.Context) (devicestoretemplates.Group, error)
+	GetGroups(context.Context, []intermediaries.Filter) ([]intermediaries.GroupIntermediary, error)
+	PostGroup(ctx context.Context, group intermediaries.GroupIntermediary) error
+	GetGroupCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.GroupCapabilityIntermediaryActivation, error)
 }
 
 func NewDevicePersistenceDB(conf config.DatabaseConfig) (DevicePersistenceDB, error) {

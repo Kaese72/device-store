@@ -33,9 +33,14 @@ func main() {
 	restRouter := router.PathPrefix("/device-store/v0/").Subrouter()
 	webapp := server.NewWebApp(persistence, adapterAttendant)
 
+	// Devices
 	restRouter.HandleFunc("/devices", webapp.GetDevices).Methods("GET")
 	restRouter.HandleFunc("/devices", webapp.PostDevice).Methods("POST")
 	restRouter.HandleFunc("/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", webapp.TriggerDeviceCapability).Methods("POST")
+	// Groups
+	restRouter.HandleFunc("/groups", webapp.GetGroups).Methods("GET")
+	restRouter.HandleFunc("/groups", webapp.PostGroup).Methods("POST")
+	restRouter.HandleFunc("/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", webapp.TriggerGroupCapability).Methods("POST")
 
 	server := &http.Server{
 		Handler: router,

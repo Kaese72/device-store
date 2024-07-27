@@ -7,26 +7,26 @@ import (
 	"github.com/Kaese72/device-store/rest/models"
 )
 
-type CapabilityIntermediary struct {
+type DeviceCapabilityIntermediary struct {
 	DeviceId string `json:"DeviceId" db:"DeviceId"`
 	Name     string `json:"name" db:"name"`
 }
 
-func (c *CapabilityIntermediary) ToRestModel() models.Capability {
-	return models.Capability{
+func (c *DeviceCapabilityIntermediary) ToRestModel() models.DeviceCapability {
+	return models.DeviceCapability{
 		Name: c.Name,
 	}
 }
 
-func CapabilityIntermediaryFromRest(cap models.Capability) CapabilityIntermediary {
-	return CapabilityIntermediary{
+func DeviceCapabilityIntermediaryFromRest(cap models.DeviceCapability) DeviceCapabilityIntermediary {
+	return DeviceCapabilityIntermediary{
 		Name: cap.Name,
 	}
 }
 
-type CapabilityIntermediaryList []CapabilityIntermediary
+type DeviceCapabilityIntermediaryList []DeviceCapabilityIntermediary
 
-func (caps *CapabilityIntermediaryList) Scan(value interface{}) error {
+func (caps *DeviceCapabilityIntermediaryList) Scan(value interface{}) error {
 	b, ok := value.([]byte)
 	if !ok {
 		return errors.New("type assertion to []byte failed")
@@ -34,18 +34,18 @@ func (caps *CapabilityIntermediaryList) Scan(value interface{}) error {
 	return json.Unmarshal(b, &caps)
 }
 
-func (caps CapabilityIntermediaryList) ToRestModel() []models.Capability {
-	restCaps := []models.Capability{}
+func (caps DeviceCapabilityIntermediaryList) ToRestModel() []models.DeviceCapability {
+	restCaps := []models.DeviceCapability{}
 	for _, cap := range caps {
 		restCaps = append(restCaps, cap.ToRestModel())
 	}
 	return restCaps
 }
 
-func CapabilityIntermediaryListFromRest(caps []models.Capability) CapabilityIntermediaryList {
-	intermediaries := CapabilityIntermediaryList{}
+func DeviceCapabilityIntermediaryListFromRest(caps []models.DeviceCapability) DeviceCapabilityIntermediaryList {
+	intermediaries := DeviceCapabilityIntermediaryList{}
 	for _, cap := range caps {
-		intermediaries = append(intermediaries, CapabilityIntermediaryFromRest(cap))
+		intermediaries = append(intermediaries, DeviceCapabilityIntermediaryFromRest(cap))
 	}
 	return intermediaries
 }
