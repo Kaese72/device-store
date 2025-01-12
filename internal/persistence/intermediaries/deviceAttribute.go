@@ -8,11 +8,13 @@ import (
 )
 
 type AttributeIntermediary struct {
-	Name     string   `db:"name"`
-	DeviceId string   `db:"deviceId"`
-	BooleanX *int     `db:"boolean"`
-	Numeric  *float32 `db:"numeric"`
-	Text     *string  `db:"text"`
+	// "db" is used when fetching directory from the database
+	// "json" is used when fetching attributes as part of a subquery on other models
+	Name     string   `db:"name" json:"name"`
+	DeviceId string   `db:"deviceId" json:"deviceId"`
+	BooleanX *float32 `db:"boolean" json:"boolean"`
+	Numeric  *float32 `db:"numeric" json:"numeric"`
+	Text     *string  `db:"text" json:"text"`
 }
 
 func (a *AttributeIntermediary) Boolean() *bool {
@@ -33,12 +35,12 @@ func (a *AttributeIntermediary) ToRestModel() models.Attribute {
 }
 
 func AttributeIntermediaryFromRest(attr models.Attribute) AttributeIntermediary {
-	var boolean *int = nil
+	var boolean *float32 = nil
 	if attr.Boolean != nil {
 		if *attr.Boolean {
-			boolean = &[]int{1}[0]
+			boolean = &[]float32{1}[0]
 		} else {
-			boolean = &[]int{0}[0]
+			boolean = &[]float32{0}[0]
 		}
 	}
 	return AttributeIntermediary{

@@ -8,8 +8,10 @@ import (
 )
 
 type DeviceCapabilityIntermediary struct {
-	DeviceId string `json:"DeviceId" db:"DeviceId"`
-	Name     string `json:"name" db:"name"`
+	// "db" is used when fetching directory from the database
+	// "json" is used when fetching capabilities as part of a subquery on other models
+	DeviceId string `db:"DeviceId" json:"DeviceId"`
+	Name     string `db:"name" json:"name"`
 }
 
 func (c *DeviceCapabilityIntermediary) ToRestModel() models.DeviceCapability {
