@@ -34,19 +34,19 @@ func main() {
 	apmgorilla.Instrument(router)
 
 	// REST WebApp
-	restRouter := router.PathPrefix("/device-store/v0/").Subrouter()
 	adapterAttendant := adapterattendant.NewAdapterAttendant(config.Loaded.AdapterAttendant)
 	restWebapp := restwebapp.NewWebApp(dbPersistence, adapterAttendant)
+	restRouter := router.PathPrefix("/device-store/v0/").Subrouter()
 	restRouter.HandleFunc("/devices", restWebapp.GetDevices).Methods("GET")
 	restRouter.HandleFunc("/groups", restWebapp.GetGroups).Methods("GET")
 	restRouter.HandleFunc("/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability).Methods("POST")
 	restRouter.HandleFunc("/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability).Methods("POST")
 
 	// Ingest WebApp
-	injestRouter := router.PathPrefix("/device-store/v0/").Subrouter()
 	ingestWebapp := ingestwebapp.NewWebApp(dbPersistence)
-	injestRouter.HandleFunc("/devices", ingestWebapp.PostDevice).Methods("POST")
-	injestRouter.HandleFunc("/groups", ingestWebapp.PostGroup).Methods("POST")
+	ingestRouter := router.PathPrefix("/device-ingest/v0/").Subrouter()
+	ingestRouter.HandleFunc("/devices", ingestWebapp.PostDevice).Methods("POST")
+	ingestRouter.HandleFunc("/groups", ingestWebapp.PostGroup).Methods("POST")
 
 	logging.Info("Successfully contacted database", context.Background())
 
