@@ -1,4 +1,4 @@
-package server
+package restwebapp
 
 import (
 	"context"
@@ -12,19 +12,18 @@ import (
 	"github.com/Kaese72/device-store/internal/adapters"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence"
-	"github.com/Kaese72/device-store/internal/persistence/intermediaries"
-	"github.com/Kaese72/device-store/rest/models"
+	"github.com/Kaese72/device-store/restmodels"
 	"github.com/Kaese72/huemie-lib/liberrors"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 )
 
 type webApp struct {
-	persistence persistence.DevicePersistenceDB
+	persistence persistence.RestPersistenceDB
 	attendant   adapterattendant.Attendant
 }
 
-func NewWebApp(persistence persistence.DevicePersistenceDB, attendant adapterattendant.Attendant) webApp {
+func NewWebApp(persistence persistence.RestPersistenceDB, attendant adapterattendant.Attendant) webApp {
 	return webApp{
 		persistence: persistence,
 		attendant:   attendant,
@@ -63,16 +62,11 @@ func serveHTTPError(err error, ctx context.Context, writer http.ResponseWriter) 
 // GetDevices returns all devices in the database
 func (app webApp) GetDevices(writer http.ResponseWriter, reader *http.Request) {
 	ctx := reader.Context()
-	intDevices, err := app.persistence.GetDevices(ctx, intermediaries.ParseQueryIntoFilters(reader.URL.Query()))
+	restDevices, err := app.persistence.GetDevices(ctx, restmodels.ParseQueryIntoFilters(reader.URL.Query()))
 	if err != nil {
 		serveHTTPError(err, ctx, writer)
 		return
 	}
-	restDevices := make([]models.Device, 0, len(intDevices))
-	for _, device := range intDevices {
-		restDevices = append(restDevices, device.ToRestModel())
-	}
-
 	resp, err := json.Marshal(restDevices)
 	if err != nil {
 		serveHTTPError(err, ctx, writer)
@@ -86,47 +80,17 @@ func (app webApp) GetDevices(writer http.ResponseWriter, reader *http.Request) {
 	}
 }
 
-func (app webApp) PostDevice(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	bridgeKey := reader.Header.Get("Bridge-Key")
-	if bridgeKey == "" {
-		http.Error(writer, "May not update devices when not identifying as a bridge", http.StatusBadRequest)
-		return
-	}
-	device := models.Device{}
-	err := json.NewDecoder(reader.Body).Decode(&device)
-	if err != nil {
-		serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
-		return
-	}
-	// We do not trust the client that much. Override the bridgeKey
-	device.BridgeKey = bridgeKey
-
-	// FIXME local tests do not allow this. Replace with JWT authentication or something
-	// _, err = attendant.GetAdapter(bridgeKey, ctx)
-	// if err != nil {
-	// 	serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-	// 	return
-	// }
-	err = app.persistence.PostDevice(ctx, intermediaries.DeviceIntermediaryFromRest(device))
-	if err != nil {
-		serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-		return
-	}
-	writer.WriteHeader(http.StatusOK)
-}
-
 func (app webApp) TriggerDeviceCapability(writer http.ResponseWriter, reader *http.Request) {
 	ctx := reader.Context()
 	vars := mux.Vars(reader)
 	// Because of regex above this will never happen
 	storeDeviceIdentifier, _ := strconv.Atoi(vars["storeDeviceIdentifier"])
 	capabilityID := vars["capabilityID"]
-	capArg := models.DeviceCapabilityArgs{}
+	capArg := restmodels.DeviceCapabilityArgs{}
 	err := json.NewDecoder(reader.Body).Decode(&capArg)
 	if err != nil {
 		if err == io.EOF {
-			capArg = models.DeviceCapabilityArgs{}
+			capArg = restmodels.DeviceCapabilityArgs{}
 
 		} else {
 			serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
@@ -155,42 +119,13 @@ func (app webApp) TriggerDeviceCapability(writer http.ResponseWriter, reader *ht
 	logging.Info("Capability seemingly successfully triggered", ctx)
 }
 
-func (app webApp) PostGroup(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	bridgeKey := reader.Header.Get("Bridge-Key")
-	if bridgeKey == "" {
-		http.Error(writer, "May not update groups when not identifying as a bridge", http.StatusBadRequest)
-		return
-	}
-	group := models.Group{}
-	err := json.NewDecoder(reader.Body).Decode(&group)
-	if err != nil {
-		serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
-		return
-	}
-	// We do not trust the client that much. Override the bridgeKey
-	group.BridgeKey = bridgeKey
-
-	err = app.persistence.PostGroup(ctx, intermediaries.GroupIntermediaryFromRest(group))
-	if err != nil {
-		serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-		return
-	}
-	writer.WriteHeader(http.StatusOK)
-}
-
 func (app webApp) GetGroups(writer http.ResponseWriter, reader *http.Request) {
 	ctx := reader.Context()
-	intGroups, err := app.persistence.GetGroups(ctx, intermediaries.ParseQueryIntoFilters(reader.URL.Query()))
+	restGroups, err := app.persistence.GetGroups(ctx, restmodels.ParseQueryIntoFilters(reader.URL.Query()))
 	if err != nil {
 		serveHTTPError(err, ctx, writer)
 		return
 	}
-	restGroups := make([]models.Group, 0, len(intGroups))
-	for _, group := range intGroups {
-		restGroups = append(restGroups, group.ToRestModel())
-	}
-
 	resp, err := json.Marshal(restGroups)
 	if err != nil {
 		serveHTTPError(err, ctx, writer)
@@ -209,11 +144,11 @@ func (app webApp) TriggerGroupCapability(writer http.ResponseWriter, reader *htt
 	vars := mux.Vars(reader)
 	storeGroupIdentifier, _ := strconv.Atoi(vars["storeGroupIdentifier"])
 	capabilityID := vars["capabilityID"]
-	capArg := models.DeviceCapabilityArgs{}
+	capArg := restmodels.DeviceCapabilityArgs{}
 	err := json.NewDecoder(reader.Body).Decode(&capArg)
 	if err != nil {
 		if err == io.EOF {
-			capArg = models.DeviceCapabilityArgs{}
+			capArg = restmodels.DeviceCapabilityArgs{}
 
 		} else {
 			serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)

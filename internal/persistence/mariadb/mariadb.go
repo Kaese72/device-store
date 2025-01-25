@@ -3,15 +3,17 @@ package mariadb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 
+	"github.com/Kaese72/device-store/ingestmodels"
 	"github.com/Kaese72/device-store/internal/config"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence/intermediaries"
+	"github.com/Kaese72/device-store/restmodels"
 	"github.com/Kaese72/huemie-lib/liberrors"
-	"github.com/georgysavva/scany/sqlscan"
 	"go.elastic.co/apm/module/apmsql"
 )
 
@@ -30,7 +32,51 @@ func NewMariadbPersistence(conf config.DatabaseConfig) (mariadbPersistence, erro
 	}, nil
 }
 
-func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []intermediaries.Filter) ([]intermediaries.DeviceIntermediary, error) {
+var deviceFilters = map[string]map[string]func(string) (string, []string){
+	"bridge-identifier": {
+		"eq": func(value string) (string, []string) {
+			return "bridgeIdentifier = ?", []string{value}
+		},
+	},
+	"id": {
+		"eq": func(value string) (string, []string) {
+			return "id = ?", []string{value}
+		},
+	},
+}
+
+type GetDevicesCapabilityIntermediate struct {
+	Name string `json:"name"`
+}
+
+func (i GetDevicesCapabilityIntermediate) toRest() restmodels.DeviceCapability {
+	return restmodels.DeviceCapability{
+		Name: i.Name,
+	}
+}
+
+type GetDevicesAttributeIntermediate struct {
+	Name         string   `json:"name"`
+	BooleanValue *float32 `json:"boolean"`
+	NumericValue *float32 `json:"numeric"`
+	TextValue    *string  `json:"text"`
+}
+
+func (i GetDevicesAttributeIntermediate) toRest() restmodels.Attribute {
+	return restmodels.Attribute{
+		Name: i.Name,
+		Boolean: func() *bool {
+			if i.BooleanValue == nil {
+				return nil
+			}
+			return &[]bool{*i.BooleanValue == 1}[0]
+		}(),
+		Numeric: i.NumericValue,
+		Text:    i.TextValue,
+	}
+}
+
+func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []restmodels.Filter) ([]restmodels.Device, error) {
 	fields := []string{
 		"id",
 		"bridgeIdentifier",
@@ -40,7 +86,7 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		"(SELECT COALESCE(JSON_ARRAYAGG(groupId), JSON_ARRAY()) FROM groupDevices WHERE deviceId = devices.id) as groupIds",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM devices`
-	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, intermediaries.DeviceFilters)
+	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, deviceFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -48,38 +94,79 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		query += " WHERE "
 		query += strings.Join(queryFragments, " AND ")
 	}
-	devices := []intermediaries.DeviceIntermediary{}
-	err = sqlscan.Select(ctx, persistence.db, &devices, query, variables...)
-	return devices, err
-}
-
-type idList []struct {
-	ID int `db:"id"`
-}
-
-func (persistence mariadbPersistence) PostDevice(ctx context.Context, device intermediaries.DeviceIntermediary) error {
-	foundIds := idList{}
-	err := sqlscan.Select(ctx, persistence.db, &foundIds, `SELECT id FROM devices WHERE bridgeIdentifier = ? AND bridgeKey = ?`, device.BridgeIdentifier, device.BridgeKey)
+	var retDevices []restmodels.Device
+	rows, err := persistence.db.Query(query, variables...)
 	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var device restmodels.Device
+		var capabilitiesBytes []byte
+		var attributesBytes []byte
+		var groupIdsBytes []byte
+		err = rows.Scan(&device.ID, &device.BridgeIdentifier, &device.BridgeKey, &attributesBytes, &capabilitiesBytes, &groupIdsBytes)
+		if err != nil {
+			return nil, err
+		}
+		// Attributes
+		var attributeIntermediates []GetDevicesAttributeIntermediate
+		err = json.Unmarshal(attributesBytes, &attributeIntermediates)
+		if err != nil {
+			return nil, err
+		}
+		for _, attribute := range attributeIntermediates {
+			device.Attributes = append(device.Attributes, attribute.toRest())
+		}
+		// Capabilities
+		var capabilityIntermediates []GetDevicesCapabilityIntermediate
+		err = json.Unmarshal(capabilitiesBytes, &capabilityIntermediates)
+		if err != nil {
+			return nil, err
+		}
+		device.Capabilities = []restmodels.DeviceCapability{}
+		for _, capability := range capabilityIntermediates {
+			device.Capabilities = append(device.Capabilities, capability.toRest())
+		}
+		// Group IDs
+		err = json.Unmarshal(groupIdsBytes, &device.GroupIds)
+		if err != nil {
+			return nil, err
+		}
+		retDevices = append(retDevices, device)
+	}
+	return retDevices, rows.Err()
+}
+
+func toDbBoolean(value *bool) *float32 {
+	if value == nil {
+		return nil
+	}
+	if *value {
+		return &[]float32{1}[0]
+	}
+	return &[]float32{0}[0]
+}
+
+func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ingestmodels.Device) error {
+	var foundId int
+	row := persistence.db.QueryRowContext(ctx, `SELECT id FROM devices WHERE bridgeIdentifier = ? AND bridgeKey = ?`, device.BridgeIdentifier, device.BridgeKey)
+	err := row.Scan(&foundId)
+	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
+
 	var deviceId int
-	if len(foundIds) == 0 {
-		createdIdsList := idList{}
-		result, err := persistence.db.QueryContext(ctx, `INSERT INTO devices (bridgeIdentifier, bridgeKey) VALUES (?, ?) RETURNING id`, device.BridgeIdentifier, device.BridgeKey)
+	if foundId == 0 {
+		rows := persistence.db.QueryRowContext(ctx, `INSERT INTO devices (bridgeIdentifier, bridgeKey) VALUES (?, ?) RETURNING id`, device.BridgeIdentifier, device.BridgeKey)
+		err := rows.Scan(&deviceId)
 		if err != nil {
 			return err
 		}
-		err = sqlscan.ScanAll(&createdIdsList, result)
-		if err != nil {
-			return err
-		}
-		deviceId = createdIdsList[0].ID
 	} else {
-		deviceId = foundIds[0].ID
+		deviceId = foundId
 	}
 	for _, attribute := range device.Attributes {
-		_, err = persistence.db.ExecContext(ctx, `INSERT INTO deviceAttributes (deviceId, name, booleanValue, numericValue, textValue) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE booleanValue=VALUES(booleanValue),numericValue=VALUES(numericValue),textValue=VALUES(textValue)`, deviceId, attribute.Name, attribute.Boolean(), attribute.Numeric, attribute.Text)
+		_, err = persistence.db.ExecContext(ctx, `INSERT INTO deviceAttributes (deviceId, name, booleanValue, numericValue, textValue) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE booleanValue=VALUES(booleanValue),numericValue=VALUES(numericValue),textValue=VALUES(textValue)`, deviceId, attribute.Name, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text)
 		if err != nil {
 			return err
 		}
@@ -94,18 +181,37 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device int
 }
 
 func (persistence mariadbPersistence) GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error) {
-	capabilities := []intermediaries.DeviceCapabilityIntermediaryActivation{}
-	err := sqlscan.Select(ctx, persistence.db, &capabilities, `SELECT bridgeIdentifier, name, bridgeKey FROM deviceCapabilities INNER JOIN devices on deviceCapabilities.deviceId = devices.id WHERE deviceId = ? AND name = ?`, storeIdentifier, capabilityName)
+	capability := intermediaries.DeviceCapabilityIntermediaryActivation{}
+	row := persistence.db.QueryRowContext(ctx, `SELECT bridgeIdentifier, name, bridgeKey FROM deviceCapabilities INNER JOIN devices on deviceCapabilities.deviceId = devices.id WHERE deviceId = ? AND name = ?`, storeIdentifier, capabilityName)
+	err := row.Scan(&capability.BridgeIdentifier, &capability.Name, &capability.BridgeKey)
 	if err != nil {
-		return intermediaries.DeviceCapabilityIntermediaryActivation{}, err
-	}
-	if len(capabilities) == 0 {
+		if err != sql.ErrNoRows {
+			return intermediaries.DeviceCapabilityIntermediaryActivation{}, err
+		}
 		return intermediaries.DeviceCapabilityIntermediaryActivation{}, liberrors.NewApiError(liberrors.NotFound, fmt.Errorf("capability %s not found for device %d", capabilityName, storeIdentifier))
 	}
-	return capabilities[0], err
+	return capability, err
 }
 
-func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []intermediaries.Filter) ([]intermediaries.GroupIntermediary, error) {
+var groupFilters = map[string]map[string]func(string) (string, []string){
+	"bridge-identifier": {
+		"eq": func(value string) (string, []string) {
+			return "bridgeIdentifier = ?", []string{value}
+		},
+	},
+	"id": {
+		"eq": func(value string) (string, []string) {
+			return "id = ?", []string{value}
+		},
+	},
+	"bridge-key": {
+		"eq": func(value string) (string, []string) {
+			return "bridgeKey = ?", []string{value}
+		},
+	},
+}
+
+func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []restmodels.Filter) ([]restmodels.Group, error) {
 	fields := []string{
 		"id",
 		"bridgeIdentifier",
@@ -115,7 +221,7 @@ func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []i
 		"(SELECT COALESCE(JSON_ARRAYAGG(deviceId), JSON_ARRAY()) FROM groupDevices WHERE groupId = groups.id) as deviceIds",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM groups`
-	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, intermediaries.GroupFilters)
+	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, groupFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -123,13 +229,34 @@ func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []i
 		query += " WHERE "
 		query += strings.Join(queryFragments, " AND ")
 	}
-	groups := []intermediaries.GroupIntermediary{}
-	err = sqlscan.Select(ctx, persistence.db, &groups, query, variables...)
-	return groups, err
+	var groups []restmodels.Group
+	rows, err := persistence.db.Query(query, variables...)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var group restmodels.Group
+		var capabilitiesBytes []byte
+		var deviceIdsBytes []byte
+		err = rows.Scan(&group.ID, &group.BridgeIdentifier, &group.BridgeKey, &group.Name, &capabilitiesBytes, &deviceIdsBytes)
+		if err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal(capabilitiesBytes, &group.Capabilities)
+		if err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal(deviceIdsBytes, &group.DeviceIds)
+		if err != nil {
+			return nil, err
+		}
+		groups = append(groups, group)
+	}
+	return groups, rows.Err()
 }
 
-func (persistence mariadbPersistence) PostGroup(ctx context.Context, group intermediaries.GroupIntermediary) error {
-	foundGroups, err := persistence.GetGroups(ctx, []intermediaries.Filter{
+func (persistence mariadbPersistence) PostGroup(ctx context.Context, group ingestmodels.Group) error {
+	foundGroups, err := persistence.GetGroups(ctx, []restmodels.Filter{
 		{
 			Key:      "bridge-identifier",
 			Operator: "eq",
@@ -146,18 +273,11 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inter
 	}
 	var groupId int
 	if len(foundGroups) == 0 {
-		createdIdsList := []struct {
-			ID int `db:"id"`
-		}{}
-		result, err := persistence.db.QueryContext(ctx, `INSERT INTO groups (bridgeIdentifier, bridgeKey, name) VALUES (?, ?, ?) RETURNING id`, group.BridgeIdentifier, group.BridgeKey, group.Name)
+		result := persistence.db.QueryRowContext(ctx, `INSERT INTO groups (bridgeIdentifier, bridgeKey, name) VALUES (?, ?, ?) RETURNING id`, group.BridgeIdentifier, group.BridgeKey, group.Name)
+		err := result.Scan(&groupId)
 		if err != nil {
 			return err
 		}
-		err = sqlscan.ScanAll(&createdIdsList, result)
-		if err != nil {
-			return err
-		}
-		groupId = createdIdsList[0].ID
 	} else {
 		groupId = foundGroups[0].ID
 		_, err := persistence.db.QueryContext(ctx, `UPDATE groups SET name = ? WHERE id = ?`, group.Name, groupId)
@@ -196,13 +316,14 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inter
 }
 
 func (persistence mariadbPersistence) GetGroupCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.GroupCapabilityIntermediaryActivation, error) {
-	capabilities := []intermediaries.GroupCapabilityIntermediaryActivation{}
-	err := sqlscan.Select(ctx, persistence.db, &capabilities, `SELECT bridgeIdentifier, groupCapabilities.name as name, bridgeKey FROM groupCapabilities INNER JOIN groups on groupCapabilities.groupId = groups.id WHERE groupId = ? AND groupCapabilities.name = ?`, storeIdentifier, capabilityName)
+	capability := intermediaries.GroupCapabilityIntermediaryActivation{}
+	row := persistence.db.QueryRowContext(ctx, `SELECT bridgeIdentifier, groupCapabilities.name, bridgeKey FROM groupCapabilities INNER JOIN groups on groupCapabilities.groupId = groups.id WHERE groupId = ? AND groupCapabilities.name = ?`, storeIdentifier, capabilityName)
+	err := row.Scan(&capability.BridgeIdentifier, &capability.Name, &capability.BridgeKey)
 	if err != nil {
-		return intermediaries.GroupCapabilityIntermediaryActivation{}, err
-	}
-	if len(capabilities) == 0 {
+		if err != sql.ErrNoRows {
+			return intermediaries.GroupCapabilityIntermediaryActivation{}, err
+		}
 		return intermediaries.GroupCapabilityIntermediaryActivation{}, liberrors.NewApiError(liberrors.NotFound, fmt.Errorf("capability %s not found for group %d", capabilityName, storeIdentifier))
 	}
-	return capabilities[0], err
+	return capability, err
 }

@@ -1,4 +1,4 @@
-package models
+package restmodels
 
 type GroupCapability struct {
 	Name string `json:"name"`

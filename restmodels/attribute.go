@@ -1,4 +1,4 @@
-package models
+package restmodels
 
 type Attribute struct {
 	Name    string   `json:"name"`

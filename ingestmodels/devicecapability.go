@@ -1,4 +1,4 @@
-package models
+package ingestmodels
 
 type DeviceCapability struct {
 	Name string `json:"name"`

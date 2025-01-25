@@ -5,7 +5,6 @@ go 1.22
 require (
 	github.com/Kaese72/adapter-attendant v0.0.9
 	github.com/Kaese72/huemie-lib v0.0.4
-	github.com/georgysavva/scany v1.2.2
 	github.com/gorilla/mux v1.8.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/viper v1.16.0
@@ -27,6 +26,7 @@ require (
 	github.com/jcchavezs/porto v0.1.0 // indirect
 	github.com/joeshaw/multierror v0.0.0-20140124173710-69b34d4ec901 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
+	github.com/mattn/go-sqlite3 v1.14.6 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/prometheus/procfs v0.0.0-20190425082905-87a4384529e0 // indirect

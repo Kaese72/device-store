@@ -1,4 +1,4 @@
-package models
+package restmodels
 
 type Group struct {
 	ID               int               `json:"id"`

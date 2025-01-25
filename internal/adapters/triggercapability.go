@@ -11,7 +11,7 @@ import (
 
 	adapterattendantmodels "github.com/Kaese72/adapter-attendant/rest/models"
 	"github.com/Kaese72/device-store/internal/logging"
-	"github.com/Kaese72/device-store/rest/models"
+	"github.com/Kaese72/device-store/restmodels"
 	"github.com/Kaese72/huemie-lib/liberrors"
 	"go.elastic.co/apm/module/apmhttp/v2"
 	"golang.org/x/net/context/ctxhttp"
@@ -19,7 +19,7 @@ import (
 
 var tracingClient = apmhttp.WrapClient(http.DefaultClient)
 
-func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, bridgeDeviceIdentifier string, capabilityID string, capArg models.DeviceCapabilityArgs) error {
+func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, bridgeDeviceIdentifier string, capabilityID string, capArg restmodels.DeviceCapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)
 	if err != nil {
 		return liberrors.NewApiError(liberrors.UserError, err)
@@ -49,7 +49,7 @@ func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels
 	return nil
 }
 
-func TriggerGroupCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, groupId string, capabilityId string, capArg models.DeviceCapabilityArgs) error {
+func TriggerGroupCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, groupId string, capabilityId string, capArg restmodels.DeviceCapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)
 	if err != nil {
 		return liberrors.NewApiError(liberrors.UserError, err)

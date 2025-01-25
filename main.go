@@ -7,9 +7,10 @@ import (
 
 	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/config"
+	"github.com/Kaese72/device-store/internal/ingestwebapp"
 	"github.com/Kaese72/device-store/internal/logging"
-	"github.com/Kaese72/device-store/internal/persistence"
-	"github.com/Kaese72/device-store/internal/server"
+	"github.com/Kaese72/device-store/internal/persistence/mariadb"
+	"github.com/Kaese72/device-store/internal/restwebapp"
 	"github.com/gorilla/mux"
 	"go.elastic.co/apm/module/apmgorilla"
 	_ "go.elastic.co/apm/module/apmsql/mysql"
@@ -18,29 +19,36 @@ import (
 func main() {
 	// # Viper configuration
 
-	persistence, err := persistence.NewDevicePersistenceDB(config.Loaded.Database)
+	dbPersistence, err := mariadb.NewMariadbPersistence(config.Loaded.Database)
 	if err != nil {
 		logging.Error(err.Error(), context.Background())
 		os.Exit(1)
 	}
-
-	adapterAttendant := adapterattendant.NewAdapterAttendant(config.Loaded.AdapterAttendant)
-	logging.Info("Successfully contacted database", context.Background())
+	// ingestPersistence, err := persistence.NewIngestPersistenceDB(config.Loaded.Database)
+	// if err != nil {
+	// 	logging.Error(err.Error(), context.Background())
+	// 	os.Exit(1)
+	// }
 
 	router := mux.NewRouter()
 	apmgorilla.Instrument(router)
 
+	// REST WebApp
 	restRouter := router.PathPrefix("/device-store/v0/").Subrouter()
-	webapp := server.NewWebApp(persistence, adapterAttendant)
+	adapterAttendant := adapterattendant.NewAdapterAttendant(config.Loaded.AdapterAttendant)
+	restWebapp := restwebapp.NewWebApp(dbPersistence, adapterAttendant)
+	restRouter.HandleFunc("/devices", restWebapp.GetDevices).Methods("GET")
+	restRouter.HandleFunc("/groups", restWebapp.GetGroups).Methods("GET")
+	restRouter.HandleFunc("/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability).Methods("POST")
+	restRouter.HandleFunc("/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability).Methods("POST")
 
-	// Devices
-	restRouter.HandleFunc("/devices", webapp.GetDevices).Methods("GET")
-	restRouter.HandleFunc("/devices", webapp.PostDevice).Methods("POST")
-	restRouter.HandleFunc("/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", webapp.TriggerDeviceCapability).Methods("POST")
-	// Groups
-	restRouter.HandleFunc("/groups", webapp.GetGroups).Methods("GET")
-	restRouter.HandleFunc("/groups", webapp.PostGroup).Methods("POST")
-	restRouter.HandleFunc("/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", webapp.TriggerGroupCapability).Methods("POST")
+	// Ingest WebApp
+	injestRouter := router.PathPrefix("/device-store/v0/").Subrouter()
+	ingestWebapp := ingestwebapp.NewWebApp(dbPersistence)
+	injestRouter.HandleFunc("/devices", ingestWebapp.PostDevice).Methods("POST")
+	injestRouter.HandleFunc("/groups", ingestWebapp.PostGroup).Methods("POST")
+
+	logging.Info("Successfully contacted database", context.Background())
 
 	server := &http.Server{
 		Handler: router,
