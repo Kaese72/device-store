@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/Kaese72/device-store/internal/config"
@@ -36,6 +37,7 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		"bridgeKey",
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"boolean\", booleanValue, \"numeric\", numericValue, \"text\", textValue)), JSON_ARRAY()) FROM deviceAttributes WHERE deviceAttributes.deviceId = devices.id) as attributes",
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceCapabilities WHERE deviceId = devices.id) as capabilities",
+		"(SELECT COALESCE(JSON_ARRAYAGG(groupId), JSON_ARRAY()) FROM groupDevices WHERE deviceId = devices.id) as groupIds",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM devices`
 	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, intermediaries.DeviceFilters)
@@ -110,6 +112,7 @@ func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []i
 		"bridgeKey",
 		"name",
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM groupCapabilities WHERE groupId = groups.id) as capabilities",
+		"(SELECT COALESCE(JSON_ARRAYAGG(deviceId), JSON_ARRAY()) FROM groupDevices WHERE groupId = groups.id) as deviceIds",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM groups`
 	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, intermediaries.GroupFilters)
@@ -126,14 +129,26 @@ func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []i
 }
 
 func (persistence mariadbPersistence) PostGroup(ctx context.Context, group intermediaries.GroupIntermediary) error {
-	foundIds := idList{}
-	err := sqlscan.Select(ctx, persistence.db, &foundIds, `SELECT id FROM groups WHERE bridgeIdentifier = ? AND bridgeKey = ?`, group.BridgeIdentifier, group.BridgeKey)
+	foundGroups, err := persistence.GetGroups(ctx, []intermediaries.Filter{
+		{
+			Key:      "bridge-identifier",
+			Operator: "eq",
+			Value:    group.BridgeIdentifier,
+		},
+		{
+			Key:      "bridge-key",
+			Operator: "eq",
+			Value:    group.BridgeKey,
+		},
+	})
 	if err != nil {
 		return err
 	}
 	var groupId int
-	if len(foundIds) == 0 {
-		createdIdsList := idList{}
+	if len(foundGroups) == 0 {
+		createdIdsList := []struct {
+			ID int `db:"id"`
+		}{}
 		result, err := persistence.db.QueryContext(ctx, `INSERT INTO groups (bridgeIdentifier, bridgeKey, name) VALUES (?, ?, ?) RETURNING id`, group.BridgeIdentifier, group.BridgeKey, group.Name)
 		if err != nil {
 			return err
@@ -144,16 +159,37 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inter
 		}
 		groupId = createdIdsList[0].ID
 	} else {
-		groupId = foundIds[0].ID
+		groupId = foundGroups[0].ID
 		_, err := persistence.db.QueryContext(ctx, `UPDATE groups SET name = ? WHERE id = ?`, group.Name, groupId)
 		if err != nil {
 			return err
 		}
 	}
+	// Update capabilities
 	for _, capability := range group.Capabilities {
 		_, err = persistence.db.ExecContext(ctx, `INSERT IGNORE INTO groupCapabilities (groupId, name) VALUES (?, ?)`, groupId, capability.Name)
 		if err != nil {
 			return err
+		}
+	}
+	// Update deviceIds
+	// // Add missing deviceIds
+	for _, deviceId := range group.DeviceIds {
+		if slices.Contains(foundGroups[0].DeviceIds, deviceId) {
+			continue
+		}
+		_, err = persistence.db.ExecContext(ctx, `INSERT INTO groupDevices (groupId, deviceId) VALUES (?, ?)`, groupId, deviceId)
+		if err != nil {
+			return err
+		}
+	}
+	// // Remove deviceIds that are not in the new list
+	for _, deviceId := range foundGroups[0].DeviceIds {
+		if !slices.Contains(group.DeviceIds, deviceId) {
+			_, err = persistence.db.ExecContext(ctx, `DELETE FROM groupDevices WHERE groupId = ? AND deviceId = ?`, groupId, deviceId)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
