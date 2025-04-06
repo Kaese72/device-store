@@ -76,6 +76,16 @@ func (i GetDevicesAttributeIntermediate) toRest() restmodels.Attribute {
 	}
 }
 
+type TriggerIntermediate struct {
+	Name string `json:"name"`
+}
+
+func (i TriggerIntermediate) toRest() restmodels.Trigger {
+	return restmodels.Trigger{
+		Name: i.Name,
+	}
+}
+
 func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []restmodels.Filter) ([]restmodels.Device, error) {
 	fields := []string{
 		"id",
@@ -84,6 +94,7 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"boolean\", booleanValue, \"numeric\", numericValue, \"text\", textValue)), JSON_ARRAY()) FROM deviceAttributes WHERE deviceAttributes.deviceId = devices.id) as attributes",
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceCapabilities WHERE deviceId = devices.id) as capabilities",
 		"(SELECT COALESCE(JSON_ARRAYAGG(groupId), JSON_ARRAY()) FROM groupDevices WHERE deviceId = devices.id) as groupIds",
+		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceTriggers WHERE deviceTriggers.deviceId = devices.id) as triggers",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM devices`
 	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, deviceFilters)
@@ -103,8 +114,9 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		var device restmodels.Device
 		var capabilitiesBytes []byte
 		var attributesBytes []byte
+		var triggerBytes []byte
 		var groupIdsBytes []byte
-		err = rows.Scan(&device.ID, &device.BridgeIdentifier, &device.BridgeKey, &attributesBytes, &capabilitiesBytes, &groupIdsBytes)
+		err = rows.Scan(&device.ID, &device.BridgeIdentifier, &device.BridgeKey, &attributesBytes, &capabilitiesBytes, &groupIdsBytes, &triggerBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -132,6 +144,17 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		if err != nil {
 			return nil, err
 		}
+		// Triggers
+		var triggerIntermediates []TriggerIntermediate
+		err = json.Unmarshal(triggerBytes, &triggerIntermediates)
+		if err != nil {
+			return nil, err
+		}
+		device.Triggers = []restmodels.Trigger{}
+		for _, trigger := range triggerIntermediates {
+			device.Triggers = append(device.Triggers, trigger.toRest())
+		}
+		// Append device to result list
 		retDevices = append(retDevices, device)
 	}
 	return retDevices, rows.Err()
@@ -173,6 +196,12 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 	}
 	for _, capability := range device.Capabilities {
 		_, err = persistence.db.ExecContext(ctx, `INSERT IGNORE INTO deviceCapabilities (deviceId, name) VALUES (?, ?)`, deviceId, capability.Name)
+		if err != nil {
+			return err
+		}
+	}
+	for _, trigger := range device.Triggers {
+		_, err = persistence.db.ExecContext(ctx, `INSERT IGNORE INTO deviceTriggers (deviceId, name) VALUES (?, ?)`, deviceId, trigger.Name)
 		if err != nil {
 			return err
 		}
