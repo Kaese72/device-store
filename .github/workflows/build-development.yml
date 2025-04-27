@@ -60,7 +60,7 @@ jobs:
         with:
           images: ${{ matrix.image }}
           tags: |
-            type=raw,value=${{ steps.previoustag.outputs.tag }}-{{date 'YYYYMMDD-hhmmss'}}-{{sha}}
+            type=raw,value=${{ steps.previoustag.outputs.tag }}-{{date 'YYYYMMDDhhmmss'}}-{{sha}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
