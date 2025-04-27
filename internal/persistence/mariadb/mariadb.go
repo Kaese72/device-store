@@ -32,6 +32,7 @@ func NewMariadbPersistence(conf config.DatabaseConfig) (mariadbPersistence, erro
 	}, nil
 }
 
+// deviceFilters defines what filters are available for the devices model
 var deviceFilters = map[string]map[string]func(string) (string, []string){
 	"bridge-identifier": {
 		"eq": func(value string) (string, []string) {
