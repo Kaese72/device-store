@@ -86,6 +86,12 @@ func (i TriggerIntermediate) toRest() restmodels.Trigger {
 	}
 }
 
+type queryAble interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []restmodels.Filter) ([]restmodels.Device, error) {
 	fields := []string{
 		"id",
@@ -172,15 +178,20 @@ func toDbBoolean(value *bool) *float32 {
 
 func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ingestmodels.Device) error {
 	var foundId int
-	row := persistence.db.QueryRowContext(ctx, `SELECT id FROM devices WHERE bridgeIdentifier = ? AND bridgeKey = ?`, device.BridgeIdentifier, device.BridgeKey)
-	err := row.Scan(&foundId)
+	tx, err := persistence.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	row := tx.QueryRowContext(ctx, `SELECT id FROM devices WHERE bridgeIdentifier = ? AND bridgeKey = ?`, device.BridgeIdentifier, device.BridgeKey)
+	err = row.Scan(&foundId)
 	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
 
 	var deviceId int
 	if foundId == 0 {
-		rows := persistence.db.QueryRowContext(ctx, `INSERT INTO devices (bridgeIdentifier, bridgeKey) VALUES (?, ?) RETURNING id`, device.BridgeIdentifier, device.BridgeKey)
+		rows := tx.QueryRowContext(ctx, `INSERT INTO devices (bridgeIdentifier, bridgeKey) VALUES (?, ?) RETURNING id`, device.BridgeIdentifier, device.BridgeKey)
 		err := rows.Scan(&deviceId)
 		if err != nil {
 			return err
@@ -189,24 +200,24 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 		deviceId = foundId
 	}
 	for _, attribute := range device.Attributes {
-		_, err = persistence.db.ExecContext(ctx, `INSERT INTO deviceAttributes (deviceId, name, booleanValue, numericValue, textValue) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE booleanValue=VALUES(booleanValue),numericValue=VALUES(numericValue),textValue=VALUES(textValue)`, deviceId, attribute.Name, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text)
+		_, err = tx.ExecContext(ctx, `INSERT INTO deviceAttributes (deviceId, name, booleanValue, numericValue, textValue) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE booleanValue=VALUES(booleanValue),numericValue=VALUES(numericValue),textValue=VALUES(textValue)`, deviceId, attribute.Name, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text)
 		if err != nil {
 			return err
 		}
 	}
 	for _, capability := range device.Capabilities {
-		_, err = persistence.db.ExecContext(ctx, `INSERT IGNORE INTO deviceCapabilities (deviceId, name) VALUES (?, ?)`, deviceId, capability.Name)
+		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO deviceCapabilities (deviceId, name) VALUES (?, ?)`, deviceId, capability.Name)
 		if err != nil {
 			return err
 		}
 	}
 	for _, trigger := range device.Triggers {
-		_, err = persistence.db.ExecContext(ctx, `INSERT IGNORE INTO deviceTriggers (deviceId, name) VALUES (?, ?)`, deviceId, trigger.Name)
+		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO deviceTriggers (deviceId, name) VALUES (?, ?)`, deviceId, trigger.Name)
 		if err != nil {
 			return err
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (persistence mariadbPersistence) GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error) {
@@ -241,6 +252,10 @@ var groupFilters = map[string]map[string]func(string) (string, []string){
 }
 
 func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []restmodels.Filter) ([]restmodels.Group, error) {
+	return getGroupsTx(ctx, filters, persistence.db)
+}
+
+func getGroupsTx(ctx context.Context, filters []restmodels.Filter, tx queryAble) ([]restmodels.Group, error) {
 	fields := []string{
 		"id",
 		"bridgeIdentifier",
@@ -259,7 +274,7 @@ func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []r
 		query += strings.Join(queryFragments, " AND ")
 	}
 	var groups []restmodels.Group
-	rows, err := persistence.db.Query(query, variables...)
+	rows, err := tx.QueryContext(ctx, query, variables...)
 	if err != nil {
 		return nil, err
 	}
@@ -285,38 +300,50 @@ func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []r
 }
 
 func (persistence mariadbPersistence) PostGroup(ctx context.Context, group ingestmodels.Group) error {
-	foundGroups, err := persistence.GetGroups(ctx, []restmodels.Filter{
-		{
-			Key:      "bridge-identifier",
-			Operator: "eq",
-			Value:    group.BridgeIdentifier,
-		},
+	tx, err := persistence.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	err = postGroupTx(ctx, group, tx)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func postGroupTx(ctx context.Context, group ingestmodels.Group, tx queryAble) error {
+	foundGroups, err := getGroupsTx(ctx, []restmodels.Filter{{
+		Key:      "bridge-identifier",
+		Operator: "eq",
+		Value:    group.BridgeIdentifier,
+	},
 		{
 			Key:      "bridge-key",
 			Operator: "eq",
 			Value:    group.BridgeKey,
 		},
-	})
+	}, tx)
 	if err != nil {
 		return err
 	}
 	var groupId int
 	if len(foundGroups) == 0 {
-		result := persistence.db.QueryRowContext(ctx, `INSERT INTO groups (bridgeIdentifier, bridgeKey, name) VALUES (?, ?, ?) RETURNING id`, group.BridgeIdentifier, group.BridgeKey, group.Name)
+		result := tx.QueryRowContext(ctx, `INSERT INTO groups (bridgeIdentifier, bridgeKey, name) VALUES (?, ?, ?) RETURNING id`, group.BridgeIdentifier, group.BridgeKey, group.Name)
 		err := result.Scan(&groupId)
 		if err != nil {
 			return err
 		}
 	} else {
 		groupId = foundGroups[0].ID
-		_, err := persistence.db.QueryContext(ctx, `UPDATE groups SET name = ? WHERE id = ?`, group.Name, groupId)
+		_, err := tx.QueryContext(ctx, `UPDATE groups SET name = ? WHERE id = ?`, group.Name, groupId)
 		if err != nil {
 			return err
 		}
 	}
 	// Update capabilities
 	for _, capability := range group.Capabilities {
-		_, err = persistence.db.ExecContext(ctx, `INSERT IGNORE INTO groupCapabilities (groupId, name) VALUES (?, ?)`, groupId, capability.Name)
+		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO groupCapabilities (groupId, name) VALUES (?, ?)`, groupId, capability.Name)
 		if err != nil {
 			return err
 		}
@@ -327,7 +354,7 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inges
 		if slices.Contains(foundGroups[0].DeviceIds, deviceId) {
 			continue
 		}
-		_, err = persistence.db.ExecContext(ctx, `INSERT INTO groupDevices (groupId, deviceId) VALUES (?, ?)`, groupId, deviceId)
+		_, err = tx.ExecContext(ctx, `INSERT INTO groupDevices (groupId, deviceId) VALUES (?, ?)`, groupId, deviceId)
 		if err != nil {
 			return err
 		}
@@ -335,7 +362,7 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inges
 	// // Remove deviceIds that are not in the new list
 	for _, deviceId := range foundGroups[0].DeviceIds {
 		if !slices.Contains(group.DeviceIds, deviceId) {
-			_, err = persistence.db.ExecContext(ctx, `DELETE FROM groupDevices WHERE groupId = ? AND deviceId = ?`, groupId, deviceId)
+			_, err = tx.ExecContext(ctx, `DELETE FROM groupDevices WHERE groupId = ? AND deviceId = ?`, groupId, deviceId)
 			if err != nil {
 				return err
 			}
