@@ -177,48 +177,116 @@ func toDbBoolean(value *bool) *float32 {
 	return &[]float32{0}[0]
 }
 
-func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ingestmodels.Device) error {
+type dbAttribute struct {
+	Name         string
+	BooleanValue *float32
+	NumericValue *float32
+	TextValue    *string
+}
+
+// Equal checks whether two dbAttributes are equal.
+func (a dbAttribute) EqualRest(other ingestmodels.Attribute) bool {
+	if a.Name != other.Name {
+		return false
+	}
+	dbBoolean := toDbBoolean(other.Boolean)
+	// Not equal if one is nil and the other is not or if they are not equal
+	// Boolean
+	if (dbBoolean == nil) != (a.BooleanValue == nil) {
+		return false
+	}
+	if dbBoolean != nil && a.BooleanValue != nil && *dbBoolean != *a.BooleanValue {
+		return false
+	}
+	// Numeric
+	if (other.Numeric == nil) != (a.NumericValue == nil) {
+		return false
+	}
+	if other.Numeric != nil && a.NumericValue != nil && *other.Numeric != *a.NumericValue {
+		return false
+	}
+	// Text
+	if (other.Text == nil) != (a.TextValue == nil) {
+		return false
+	}
+	if other.Text != nil && a.TextValue != nil && *other.Text != *a.TextValue {
+		return false
+	}
+	// All checks passed, they are equal
+	return true
+}
+
+func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ingestmodels.Device) ([]ingestmodels.Attribute, error) {
 	var foundId int
 	tx, err := persistence.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
 	defer tx.Rollback()
 	row := tx.QueryRowContext(ctx, `SELECT id FROM devices WHERE bridgeIdentifier = ? AND bridgeKey = ?`, device.BridgeIdentifier, device.BridgeKey)
 	err = row.Scan(&foundId)
 	if err != nil && err != sql.ErrNoRows {
-		return err
+		return nil, err
 	}
 
 	var deviceId int
+	var presentAttributes map[string]dbAttribute = make(map[string]dbAttribute)
 	if foundId == 0 {
 		rows := tx.QueryRowContext(ctx, `INSERT INTO devices (bridgeIdentifier, bridgeKey) VALUES (?, ?) RETURNING id`, device.BridgeIdentifier, device.BridgeKey)
 		err := rows.Scan(&deviceId)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else {
 		deviceId = foundId
-	}
-	for _, attribute := range device.Attributes {
-		_, err = tx.ExecContext(ctx, `INSERT INTO deviceAttributes (deviceId, name, booleanValue, numericValue, textValue) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE booleanValue=VALUES(booleanValue),numericValue=VALUES(numericValue),textValue=VALUES(textValue)`, deviceId, attribute.Name, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text)
+		// Find already present attributes
+		rows, err := tx.QueryContext(ctx, `SELECT name, booleanValue, numericValue, textValue FROM deviceAttributes WHERE deviceId = ?`, deviceId)
 		if err != nil {
-			return err
+			return nil, err
+		}
+		for rows.Next() {
+			var presentAttribute dbAttribute
+			err = rows.Scan(&presentAttribute.Name, &presentAttribute.BooleanValue, &presentAttribute.NumericValue, &presentAttribute.TextValue)
+			if err != nil {
+				return nil, err
+			}
+			presentAttributes[presentAttribute.Name] = presentAttribute
+		}
+	}
+	var updatedAttributes []ingestmodels.Attribute
+	for _, attribute := range device.Attributes {
+		// If the attributes is already present and is different, update it record for event updates later
+		if presentAttribute, ok := presentAttributes[attribute.Name]; ok {
+			if !presentAttribute.EqualRest(attribute) {
+				_, err = tx.ExecContext(ctx, `UPDATE deviceAttributes SET booleanValue=?, numericValue=?, textValue=? WHERE deviceId=? AND name=?`, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text, deviceId, attribute.Name)
+				if err != nil {
+					return nil, err
+				}
+				updatedAttributes = append(updatedAttributes, attribute)
+			}
+		} else {
+			// If the attribute is not present, insert it
+			_, err = tx.ExecContext(ctx, `INSERT INTO deviceAttributes (deviceId, name, booleanValue, numericValue, textValue) VALUES (?, ?, ?, ?, ?)`, deviceId, attribute.Name, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text)
+			updatedAttributes = append(updatedAttributes, attribute)
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	for _, capability := range device.Capabilities {
 		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO deviceCapabilities (deviceId, name) VALUES (?, ?)`, deviceId, capability.Name)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	for _, trigger := range device.Triggers {
 		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO deviceTriggers (deviceId, name) VALUES (?, ?)`, deviceId, trigger.Name)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return tx.Commit()
+	return updatedAttributes, tx.Commit()
 }
 
 func (persistence mariadbPersistence) GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error) {

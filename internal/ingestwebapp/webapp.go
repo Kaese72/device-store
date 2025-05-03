@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/Kaese72/device-store/ingestmodels"
-	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence"
 	"github.com/Kaese72/huemie-lib/liberrors"
@@ -15,7 +14,6 @@ import (
 
 type webApp struct {
 	persistence persistence.IngestPersistenceDB
-	attendant   adapterattendant.Attendant
 }
 
 func NewWebApp(persistence persistence.IngestPersistenceDB) webApp {
@@ -75,12 +73,15 @@ func (app webApp) PostDevice(writer http.ResponseWriter, reader *http.Request) {
 	// 	serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 	// 	return
 	// }
-	err = app.persistence.PostDevice(ctx, device)
+	_, err = app.persistence.PostDevice(ctx, device)
 	if err != nil {
 		serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 		return
 	}
 	writer.WriteHeader(http.StatusOK)
+	// Update the rabbitmq queue with the changed attributes after the device has been updated
+	// If this fails the device remains changed
+
 }
 
 func (app webApp) PostGroup(writer http.ResponseWriter, reader *http.Request) {
