@@ -26,6 +26,21 @@ func (conf DatabaseConfig) Validate() error {
 	return nil
 }
 
+type EventConfig struct {
+	DeviceUpdatesTopic string `json:"deviceUpdates" mapstructure:"deviceUpdates"`
+	ConnectionString   string `json:"connectionString" mapstructure:"connectionString"`
+}
+
+func (conf EventConfig) Validate() error {
+	if conf.DeviceUpdatesTopic == "" {
+		return errors.New("must supply event device updates topic")
+	}
+	if conf.ConnectionString == "" {
+		return errors.New("must supply event connection string")
+	}
+	return nil
+}
+
 type AdapterAttendantConfig struct {
 	URL string `json:"url" mapstructure:"url"`
 }
@@ -41,6 +56,7 @@ type Config struct {
 	Database         DatabaseConfig         `json:"database" mapstructure:"database"`
 	AdapterAttendant AdapterAttendantConfig `json:"adapter-attendant" mapstructure:"adapter-attendant"`
 	PurgeDB          bool                   `json:"purge-db"`
+	Event            EventConfig            `json:"event" mapstructure:"event"`
 }
 
 func (conf Config) Validate() error {
@@ -48,6 +64,9 @@ func (conf Config) Validate() error {
 		return err
 	}
 	if err := conf.AdapterAttendant.Validate(); err != nil {
+		return err
+	}
+	if err := conf.Event.Validate(); err != nil {
 		return err
 	}
 	return nil
@@ -79,6 +98,11 @@ func init() {
 	viper.BindEnv("logging.stdout")
 	viper.SetDefault("logging.stdout", true)
 	viper.BindEnv("logging.http.url")
+
+	// Event
+	viper.BindEnv("event.deviceUpdates")
+	viper.SetDefault("event.deviceUpdates", "deviceUpdates")
+	viper.BindEnv("event.connectionString")
 
 	err := viper.Unmarshal(&Loaded)
 	if err != nil {
