@@ -109,8 +109,4 @@ func init() {
 		logging.Error(err.Error(), context.TODO())
 		os.Exit(1)
 	}
-	if err := Loaded.Validate(); err != nil {
-		logging.Error(err.Error(), context.TODO())
-		os.Exit(1)
-	}
 }

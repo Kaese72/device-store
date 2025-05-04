@@ -18,6 +18,10 @@ import (
 )
 
 func main() {
+	if err := config.Loaded.Validate(); err != nil {
+		logging.Error(err.Error(), context.TODO())
+		os.Exit(1)
+	}
 	// # Viper configuration
 	dbPersistence, err := mariadb.NewMariadbPersistence(config.Loaded.Database)
 	if err != nil {
