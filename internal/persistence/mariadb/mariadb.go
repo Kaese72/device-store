@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 
@@ -202,7 +203,9 @@ func (a dbAttribute) EqualRest(other ingestmodels.Attribute) bool {
 	if (other.Numeric == nil) != (a.NumericValue == nil) {
 		return false
 	}
-	if other.Numeric != nil && a.NumericValue != nil && *other.Numeric != *a.NumericValue {
+	// Numeric comparison is even more tricky because float point numbers have rounding errors
+	// and such, so we compare if the numbers are more than two decimal points apart from each other
+	if other.Numeric != nil && a.NumericValue != nil && math.Abs(float64(*other.Numeric)-float64(*a.NumericValue)) > 0.01 {
 		return false
 	}
 	// Text
