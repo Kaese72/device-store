@@ -84,19 +84,22 @@ func (app webApp) PostDevice(writer http.ResponseWriter, reader *http.Request) {
 	writer.WriteHeader(http.StatusOK)
 	// Update the rabbitmq queue with the changed attributes after the device has been updated
 	// If this fails the device remains changed
-	deviceUpdateEvent := eventmodels.DeviceAttributeUpdate{
-		DeviceID:   deviceId,
-		Attributes: []eventmodels.Attribute{},
+	if len(updates) != 0 {
+		// Only run updates if there actually are updates
+		deviceUpdateEvent := eventmodels.DeviceAttributeUpdate{
+			DeviceID:   deviceId,
+			Attributes: []eventmodels.Attribute{},
+		}
+		for _, update := range updates {
+			deviceUpdateEvent.Attributes = append(deviceUpdateEvent.Attributes, eventmodels.Attribute{
+				Name:    update.Name,
+				Boolean: update.Boolean,
+				Text:    update.Text,
+				Numeric: update.Numeric,
+			})
+		}
+		app.deviceUpdatesChan <- deviceUpdateEvent
 	}
-	for _, update := range updates {
-		deviceUpdateEvent.Attributes = append(deviceUpdateEvent.Attributes, eventmodels.Attribute{
-			Name:    update.Name,
-			Boolean: update.Boolean,
-			Text:    update.Text,
-			Numeric: update.Numeric,
-		})
-	}
-	app.deviceUpdatesChan <- deviceUpdateEvent
 }
 
 func (app webApp) PostGroup(writer http.ResponseWriter, reader *http.Request) {
