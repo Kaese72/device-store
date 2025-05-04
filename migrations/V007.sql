@@ -1,0 +1,1 @@
+ALTER TABLE deviceAttributes MODIFY COLUMN numericValue DECIMAL(10, 4);

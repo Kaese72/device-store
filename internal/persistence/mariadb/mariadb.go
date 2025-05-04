@@ -205,7 +205,8 @@ func (a dbAttribute) EqualRest(other ingestmodels.Attribute) bool {
 	}
 	// Numeric comparison is even more tricky because float point numbers have rounding errors
 	// and such, so we compare if the numbers are more than two decimal points apart from each other
-	if other.Numeric != nil && a.NumericValue != nil && math.Abs(float64(*other.Numeric)-float64(*a.NumericValue)) > 0.01 {
+	// In the database the type is DECIMAL(10,4), so we have some leeway
+	if other.Numeric != nil && a.NumericValue != nil && math.Abs(float64(*other.Numeric)-float64(*a.NumericValue)) > 0.001 {
 		return false
 	}
 	// Text
