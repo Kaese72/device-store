@@ -20,7 +20,7 @@ type RestPersistenceDB interface {
 type IngestPersistenceDB interface {
 	// Device Control
 	// PostDevice updates a device and returns the stuff that has been changed
-	PostDevice(context.Context, ingestmodels.Device) ([]ingestmodels.Attribute, error)
+	PostDevice(context.Context, ingestmodels.Device) (int, []ingestmodels.Attribute, error)
 	//// Groups
 	PostGroup(context.Context, ingestmodels.Group) error
 }

@@ -216,18 +216,18 @@ func (a dbAttribute) EqualRest(other ingestmodels.Attribute) bool {
 	return true
 }
 
-func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ingestmodels.Device) ([]ingestmodels.Attribute, error) {
+func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ingestmodels.Device) (int, []ingestmodels.Attribute, error) {
 	var foundId int
 	tx, err := persistence.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
 	defer tx.Rollback()
 	row := tx.QueryRowContext(ctx, `SELECT id FROM devices WHERE bridgeIdentifier = ? AND bridgeKey = ?`, device.BridgeIdentifier, device.BridgeKey)
 	err = row.Scan(&foundId)
 	if err != nil && err != sql.ErrNoRows {
-		return nil, err
+		return 0, nil, err
 	}
 
 	var deviceId int
@@ -236,20 +236,20 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 		rows := tx.QueryRowContext(ctx, `INSERT INTO devices (bridgeIdentifier, bridgeKey) VALUES (?, ?) RETURNING id`, device.BridgeIdentifier, device.BridgeKey)
 		err := rows.Scan(&deviceId)
 		if err != nil {
-			return nil, err
+			return 0, nil, err
 		}
 	} else {
 		deviceId = foundId
 		// Find already present attributes
 		rows, err := tx.QueryContext(ctx, `SELECT name, booleanValue, numericValue, textValue FROM deviceAttributes WHERE deviceId = ?`, deviceId)
 		if err != nil {
-			return nil, err
+			return 0, nil, err
 		}
 		for rows.Next() {
 			var presentAttribute dbAttribute
 			err = rows.Scan(&presentAttribute.Name, &presentAttribute.BooleanValue, &presentAttribute.NumericValue, &presentAttribute.TextValue)
 			if err != nil {
-				return nil, err
+				return 0, nil, err
 			}
 			presentAttributes[presentAttribute.Name] = presentAttribute
 		}
@@ -261,7 +261,7 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 			if !presentAttribute.EqualRest(attribute) {
 				_, err = tx.ExecContext(ctx, `UPDATE deviceAttributes SET booleanValue=?, numericValue=?, textValue=? WHERE deviceId=? AND name=?`, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text, deviceId, attribute.Name)
 				if err != nil {
-					return nil, err
+					return 0, nil, err
 				}
 				updatedAttributes = append(updatedAttributes, attribute)
 			}
@@ -271,22 +271,22 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 			updatedAttributes = append(updatedAttributes, attribute)
 		}
 		if err != nil {
-			return nil, err
+			return 0, nil, err
 		}
 	}
 	for _, capability := range device.Capabilities {
 		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO deviceCapabilities (deviceId, name) VALUES (?, ?)`, deviceId, capability.Name)
 		if err != nil {
-			return nil, err
+			return 0, nil, err
 		}
 	}
 	for _, trigger := range device.Triggers {
 		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO deviceTriggers (deviceId, name) VALUES (?, ?)`, deviceId, trigger.Name)
 		if err != nil {
-			return nil, err
+			return 0, nil, err
 		}
 	}
-	return updatedAttributes, tx.Commit()
+	return deviceId, updatedAttributes, tx.Commit()
 }
 
 func (persistence mariadbPersistence) GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error) {

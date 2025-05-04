@@ -10,6 +10,7 @@ import (
 
 	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/adapters"
+	"github.com/Kaese72/device-store/internal/events"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence"
 	"github.com/Kaese72/device-store/restmodels"
@@ -21,12 +22,14 @@ import (
 type webApp struct {
 	persistence persistence.RestPersistenceDB
 	attendant   adapterattendant.Attendant
+	events      *events.EventsConsumer
 }
 
-func NewWebApp(persistence persistence.RestPersistenceDB, attendant adapterattendant.Attendant) webApp {
+func NewWebApp(persistence persistence.RestPersistenceDB, attendant adapterattendant.Attendant, events *events.EventsConsumer) webApp {
 	return webApp{
 		persistence: persistence,
 		attendant:   attendant,
+		events:      events,
 	}
 }
 
@@ -77,6 +80,31 @@ func (app webApp) GetDevices(writer http.ResponseWriter, reader *http.Request) {
 	_, err = writer.Write(resp)
 	if err != nil {
 		serveHTTPError(err, ctx, writer)
+	}
+}
+
+// StreamDeviceUpdates is a SSE endpoint that sends updates from
+func (app webApp) StreamDeviceUpdates(writer http.ResponseWriter, reader *http.Request) {
+	ctx := reader.Context()
+	// Set headers for SSE
+	writer.Header().Set("Content-Type", "text/event-stream")
+	writer.Header().Set("Cache-Control", "no-cache")
+	writer.Header().Set("Connection", "keep-alive")
+	// writer.Header().Set("Access-Control-Allow-Origin", "*")
+	deviceUpdates, err := app.events.DeviceUpdates(ctx)
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+		return
+	}
+	for update := range deviceUpdates {
+		resp, err := json.Marshal(update)
+		if err != nil {
+			// Even though this is a critical error, we continue
+			logging.ErrorErr(err, ctx)
+			continue
+		}
+		writer.Write([]byte("data: " + string(resp) + "\n\n"))
+		writer.(http.Flusher).Flush()
 	}
 }
 

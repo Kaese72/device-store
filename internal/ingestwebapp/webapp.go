@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/Kaese72/device-store/eventmodels"
 	"github.com/Kaese72/device-store/ingestmodels"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence"
@@ -13,12 +14,14 @@ import (
 )
 
 type webApp struct {
-	persistence persistence.IngestPersistenceDB
+	persistence       persistence.IngestPersistenceDB
+	deviceUpdatesChan chan eventmodels.DeviceAttributeUpdate
 }
 
-func NewWebApp(persistence persistence.IngestPersistenceDB) webApp {
+func NewWebApp(persistence persistence.IngestPersistenceDB, deviceUpdatesChan chan eventmodels.DeviceAttributeUpdate) webApp {
 	return webApp{
-		persistence: persistence,
+		persistence:       persistence,
+		deviceUpdatesChan: deviceUpdatesChan,
 	}
 }
 
@@ -73,7 +76,7 @@ func (app webApp) PostDevice(writer http.ResponseWriter, reader *http.Request) {
 	// 	serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 	// 	return
 	// }
-	_, err = app.persistence.PostDevice(ctx, device)
+	deviceId, updates, err := app.persistence.PostDevice(ctx, device)
 	if err != nil {
 		serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
 		return
@@ -81,7 +84,19 @@ func (app webApp) PostDevice(writer http.ResponseWriter, reader *http.Request) {
 	writer.WriteHeader(http.StatusOK)
 	// Update the rabbitmq queue with the changed attributes after the device has been updated
 	// If this fails the device remains changed
-
+	deviceUpdateEvent := eventmodels.DeviceAttributeUpdate{
+		DeviceID:   deviceId,
+		Attributes: []eventmodels.Attribute{},
+	}
+	for _, update := range updates {
+		deviceUpdateEvent.Attributes = append(deviceUpdateEvent.Attributes, eventmodels.Attribute{
+			Name:    update.Name,
+			Boolean: update.Boolean,
+			Text:    update.Text,
+			Numeric: update.Numeric,
+		})
+	}
+	app.deviceUpdatesChan <- deviceUpdateEvent
 }
 
 func (app webApp) PostGroup(writer http.ResponseWriter, reader *http.Request) {
