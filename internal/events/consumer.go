@@ -13,15 +13,29 @@ import (
 
 type DeviceSubscriptions struct {
 	input      <-chan eventmodels.DeviceAttributeUpdate
-	outputs    map[chan eventmodels.DeviceAttributeUpdate]struct{}
+	middles    map[chan eventmodels.DeviceAttributeUpdate]struct{}
 	outputLock sync.Mutex
 }
 
+func (ds *DeviceSubscriptions) startFanout() {
+	// Start a goroutine to read from the input channel and send to all output channels
+	go func() {
+		for update := range ds.input {
+			ds.outputLock.Lock()
+			for middle := range ds.middles {
+				middle <- update
+			}
+			ds.outputLock.Unlock()
+		}
+	}()
+}
+
 func (ds *DeviceSubscriptions) Subscribe(ctx context.Context) <-chan eventmodels.DeviceAttributeUpdate {
-	out := make(chan eventmodels.DeviceAttributeUpdate)
+	middle := make(chan eventmodels.DeviceAttributeUpdate)
+	subscription := make(chan eventmodels.DeviceAttributeUpdate)
 	ds.outputLock.Lock()
 	defer ds.outputLock.Unlock()
-	ds.outputs[out] = struct{}{}
+	ds.middles[middle] = struct{}{}
 	go func() {
 		for {
 			select {
@@ -29,26 +43,19 @@ func (ds *DeviceSubscriptions) Subscribe(ctx context.Context) <-chan eventmodels
 				// Client is done, close the channel and return
 				ds.outputLock.Lock()
 				defer ds.outputLock.Unlock()
-				delete(ds.outputs, out)
-				close(out)
+				delete(ds.middles, middle)
+				close(subscription)
 				return
 
-			case update, ok := <-ds.input:
-				if !ok {
-					// Channel is closed, close the output channel and return
-					ds.outputLock.Lock()
-					defer ds.outputLock.Unlock()
-					delete(ds.outputs, out)
-					close(out)
-					return
-				}
+			case update := <-ds.input:
+				// FIXME Handle error?
 				// Received a message, continue processing
 				// FIXME if receiver does not read fast enough, terminate it
-				out <- update
+				subscription <- update
 			}
 		}
 	}()
-	return out
+	return subscription
 }
 
 type EventsConsumer struct {
@@ -131,9 +138,11 @@ func (h *EventsConsumer) DeviceUpdates(ctx context.Context) (*DeviceSubscription
 		// Cleanup and terminate
 		close(out)
 	}()
-	return &DeviceSubscriptions{
+	subscriptionManager := &DeviceSubscriptions{
 		input:      out,
-		outputs:    make(map[chan eventmodels.DeviceAttributeUpdate]struct{}),
+		middles:    make(map[chan eventmodels.DeviceAttributeUpdate]struct{}),
 		outputLock: sync.Mutex{},
-	}, nil
+	}
+	subscriptionManager.startFanout()
+	return subscriptionManager, nil
 }
