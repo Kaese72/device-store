@@ -47,7 +47,7 @@ func (ds *DeviceSubscriptions) Subscribe(ctx context.Context) <-chan eventmodels
 				close(subscription)
 				return
 
-			case update := <-ds.input:
+			case update := <-middle:
 				// FIXME Handle error?
 				// Received a message, continue processing
 				// FIXME if receiver does not read fast enough, terminate it
