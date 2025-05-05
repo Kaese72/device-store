@@ -34,6 +34,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer eventsHandler.Close()
+	deviceUpdates, err := eventsHandler.DeviceUpdates(context.Background())
+	if err != nil {
+		logging.Error(err.Error(), context.Background())
+		os.Exit(1)
+	}
 
 	eventsProducer, err := events.NewEventsProducer(config.Loaded.Event)
 	if err != nil {
@@ -52,7 +57,7 @@ func main() {
 
 	// REST WebApp
 	adapterAttendant := adapterattendant.NewAdapterAttendant(config.Loaded.AdapterAttendant)
-	restWebapp := restwebapp.NewWebApp(dbPersistence, adapterAttendant, eventsHandler)
+	restWebapp := restwebapp.NewWebApp(dbPersistence, adapterAttendant, deviceUpdates)
 	restRouter := router.PathPrefix("/device-store/v0/").Subrouter()
 	restRouter.HandleFunc("/devices", restWebapp.GetDevices).Methods("GET")
 	restRouter.HandleFunc("/devices/events", restWebapp.StreamDeviceUpdates).Methods("GET")

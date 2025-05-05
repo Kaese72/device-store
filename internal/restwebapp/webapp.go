@@ -22,10 +22,10 @@ import (
 type webApp struct {
 	persistence persistence.RestPersistenceDB
 	attendant   adapterattendant.Attendant
-	events      *events.EventsConsumer
+	events      *events.DeviceSubscriptions
 }
 
-func NewWebApp(persistence persistence.RestPersistenceDB, attendant adapterattendant.Attendant, events *events.EventsConsumer) webApp {
+func NewWebApp(persistence persistence.RestPersistenceDB, attendant adapterattendant.Attendant, events *events.DeviceSubscriptions) webApp {
 	return webApp{
 		persistence: persistence,
 		attendant:   attendant,
@@ -91,11 +91,7 @@ func (app webApp) StreamDeviceUpdates(writer http.ResponseWriter, reader *http.R
 	writer.Header().Set("Cache-Control", "no-cache")
 	writer.Header().Set("Connection", "keep-alive")
 	// writer.Header().Set("Access-Control-Allow-Origin", "*")
-	deviceUpdates, err := app.events.DeviceUpdates(ctx)
-	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
-	}
+	deviceUpdates := app.events.Subscribe(ctx)
 	for update := range deviceUpdates {
 		resp, err := json.Marshal(update)
 		if err != nil {

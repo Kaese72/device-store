@@ -3,12 +3,53 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"sync"
 
 	"github.com/Kaese72/device-store/eventmodels"
 	"github.com/Kaese72/device-store/internal/config"
 	"github.com/Kaese72/device-store/internal/logging"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+type DeviceSubscriptions struct {
+	input      <-chan eventmodels.DeviceAttributeUpdate
+	outputs    map[chan eventmodels.DeviceAttributeUpdate]struct{}
+	outputLock sync.Mutex
+}
+
+func (ds *DeviceSubscriptions) Subscribe(ctx context.Context) <-chan eventmodels.DeviceAttributeUpdate {
+	out := make(chan eventmodels.DeviceAttributeUpdate)
+	ds.outputLock.Lock()
+	defer ds.outputLock.Unlock()
+	ds.outputs[out] = struct{}{}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				// Client is done, close the channel and return
+				ds.outputLock.Lock()
+				defer ds.outputLock.Unlock()
+				delete(ds.outputs, out)
+				close(out)
+				return
+
+			case update, ok := <-ds.input:
+				if !ok {
+					// Channel is closed, close the output channel and return
+					ds.outputLock.Lock()
+					defer ds.outputLock.Unlock()
+					delete(ds.outputs, out)
+					close(out)
+					return
+				}
+				// Received a message, continue processing
+				// FIXME if receiver does not read fast enough, terminate it
+				out <- update
+			}
+		}
+	}()
+	return out
+}
 
 type EventsConsumer struct {
 	connection         *amqp.Connection
@@ -32,7 +73,7 @@ func (h *EventsConsumer) Close() error {
 
 // DeviceUpdates returns a channel on which we get device updates on
 // from the message queue. The channel is closed when the connection is closed.
-func (h *EventsConsumer) DeviceUpdates(ctx context.Context) (<-chan eventmodels.DeviceAttributeUpdate, error) {
+func (h *EventsConsumer) DeviceUpdates(ctx context.Context) (*DeviceSubscriptions, error) {
 	ch, err := h.connection.Channel()
 	if err != nil {
 		return nil, err
@@ -90,5 +131,9 @@ func (h *EventsConsumer) DeviceUpdates(ctx context.Context) (<-chan eventmodels.
 		// Cleanup and terminate
 		close(out)
 	}()
-	return out, nil
+	return &DeviceSubscriptions{
+		input:      out,
+		outputs:    make(map[chan eventmodels.DeviceAttributeUpdate]struct{}),
+		outputLock: sync.Mutex{},
+	}, nil
 }
