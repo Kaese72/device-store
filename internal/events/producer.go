@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 
 	"github.com/Kaese72/device-store/eventmodels"
 	"github.com/Kaese72/device-store/internal/config"
@@ -37,13 +38,15 @@ func (h *EventsProducer) ProduceDeviceUpdates() (chan eventmodels.DeviceAttribut
 	if err != nil {
 		return nil, err
 	}
-	q, err := ch.QueueDeclare(
-		h.deviceUpdatesTopic, // name
-		false,                // durable
-		false,                // delete when unused
-		false,                // exclusive
-		false,                // no-wait
-		nil,                  // arguments
+	// FIXME this piece of code is in two places... How to avoid duplication?
+	err = ch.ExchangeDeclare(
+		"deviceAttributeUpdates", // name
+		"fanout",                 // Send to all attached queues
+		true,                     // durable
+		false,                    // auto-deleted
+		false,                    // internal
+		false,                    // no-wait
+		nil,                      // arguments
 	)
 	if err != nil {
 		return nil, err
@@ -57,10 +60,10 @@ func (h *EventsProducer) ProduceDeviceUpdates() (chan eventmodels.DeviceAttribut
 				continue // We do not want to stop even if something goes wrong
 			}
 			err = ch.PublishWithContext(context.Background(),
-				"",     // default exchange
-				q.Name, // routing key
-				false,  // mandatory
-				false,  // immediate
+				"deviceAttributeUpdates",      // default exchange
+				strconv.Itoa(update.DeviceID), // routing key
+				false,                         // mandatory
+				false,                         // immediate
 				amqp.Publishing{
 					ContentType: "application/json",
 					Body:        body,

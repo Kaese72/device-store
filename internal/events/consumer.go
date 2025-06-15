@@ -85,13 +85,37 @@ func (h *EventsConsumer) DeviceUpdates(ctx context.Context) (*DeviceSubscription
 	if err != nil {
 		return nil, err
 	}
+	err = ch.ExchangeDeclare(
+		"deviceAttributeUpdates", // name
+		"fanout",                 // Send to all attached queues
+		true,                     // durable
+		false,                    // auto-deleted
+		false,                    // internal
+		false,                    // no-wait
+		nil,                      // arguments
+	)
+	if err != nil {
+		return nil, err
+	}
 	q, err := ch.QueueDeclare(
-		h.deviceUpdatesTopic, // name
-		false,                // durable
-		false,                // delete when unused
-		false,                // exclusive
-		false,                // no-wait
-		nil,                  // arguments
+		"",    // name, leave empty for auto-generated name
+		false, // durable
+		false, // delete when unused
+		true,  // exclusive, one queue per service is created
+		false, // no-wait
+		nil,   // arguments
+	)
+	if err != nil {
+		return nil, err
+	}
+	// Bind the queue to the exchange, this should result in all messages
+	// sent to the exchange being delivered to this queue
+	err = ch.QueueBind(
+		q.Name,                   // queue name
+		"",                       // Routing key, not used for fanout
+		"deviceAttributeUpdates", // exchange
+		false,                    // no-wait
+		nil,                      // arguments
 	)
 	if err != nil {
 		return nil, err
