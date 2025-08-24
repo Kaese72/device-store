@@ -53,7 +53,7 @@ INSERT INTO deviceAttributeAudit (
 );
 
 -- From V006.sql
-DELETE TABLE IF EXISTS deviceAudits;
+DROP TABLE IF EXISTS deviceAudits;
 
 CREATE TABLE IF NOT EXISTS deviceCapabilityTriggerAudit (
     id SERIAL PRIMARY KEY,
