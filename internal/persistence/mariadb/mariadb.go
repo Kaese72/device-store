@@ -503,15 +503,20 @@ func postGroupTx(ctx context.Context, group ingestmodels.Group, tx queryAble) er
 		return err
 	}
 	var groupId int
+	deviceIdsInGroup := []int{}
 	if len(foundGroups) == 0 {
 		result := tx.QueryRowContext(ctx, `INSERT INTO groups (bridgeIdentifier, bridgeKey, name) VALUES (?, ?, ?) RETURNING id`, group.BridgeIdentifier, group.BridgeKey, group.Name)
+		if result == nil {
+			return fmt.Errorf("failed to insert group: QueryRowContext returned nil")
+		}
 		err := result.Scan(&groupId)
 		if err != nil {
 			return err
 		}
 	} else {
 		groupId = foundGroups[0].ID
-		_, err := tx.QueryContext(ctx, `UPDATE groups SET name = ? WHERE id = ?`, group.Name, groupId)
+		deviceIdsInGroup = foundGroups[0].DeviceIds
+		_, err := tx.ExecContext(ctx, `UPDATE groups SET name = ? WHERE id = ?`, group.Name, groupId)
 		if err != nil {
 			return err
 		}
@@ -526,7 +531,7 @@ func postGroupTx(ctx context.Context, group ingestmodels.Group, tx queryAble) er
 	// Update deviceIds
 	// // Add missing deviceIds
 	for _, deviceId := range group.DeviceIds {
-		if slices.Contains(foundGroups[0].DeviceIds, deviceId) {
+		if slices.Contains(deviceIdsInGroup, deviceId) {
 			continue
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO groupDevices (groupId, deviceId) VALUES (?, ?)`, groupId, deviceId)
@@ -535,7 +540,7 @@ func postGroupTx(ctx context.Context, group ingestmodels.Group, tx queryAble) er
 		}
 	}
 	// // Remove deviceIds that are not in the new list
-	for _, deviceId := range foundGroups[0].DeviceIds {
+	for _, deviceId := range deviceIdsInGroup {
 		if !slices.Contains(group.DeviceIds, deviceId) {
 			_, err = tx.ExecContext(ctx, `DELETE FROM groupDevices WHERE groupId = ? AND deviceId = ?`, groupId, deviceId)
 			if err != nil {
