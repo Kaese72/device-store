@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Kaese72/device-store/ingestmodels"
 	"github.com/Kaese72/device-store/internal/config"
@@ -34,17 +36,68 @@ func NewMariadbPersistence(conf config.DatabaseConfig) (mariadbPersistence, erro
 }
 
 // deviceFilters defines what filters are available for the devices model
-var deviceFilters = map[string]map[string]func(string) (string, []string){
+var deviceFilters = map[string]map[string]func(string) (string, []string, error){
 	"bridge-identifier": {
-		"eq": func(value string) (string, []string) {
-			return "bridgeIdentifier = ?", []string{value}
+		"eq": func(value string) (string, []string, error) {
+			return "bridgeIdentifier = ?", []string{value}, nil
 		},
 	},
 	"id": {
-		"eq": func(value string) (string, []string) {
-			return "id = ?", []string{value}
+		"eq": func(value string) (string, []string, error) {
+			if regexp.MustCompile(`^\d+$`).MatchString(value) {
+				return "id = ?", []string{value}, nil
+			}
+			return "", nil, liberrors.NewApiError(liberrors.UserError, fmt.Errorf("id filter must be an integer value"))
 		},
 	},
+}
+
+// validateTimestamp validates that the valis is on the format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'
+func validateTimestamp(value string) error {
+	if regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`).MatchString(value) {
+		_, err := time.Parse("2006-01-02 15:04:05", value)
+		if err == nil {
+			return nil
+		}
+		return liberrors.NewApiError(liberrors.UserError, fmt.Errorf("timestamp parsing error %s", err.Error()))
+	}
+	if regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`).MatchString(value) {
+		_, err := time.Parse("2006-01-02", value)
+		if err == nil {
+			return nil
+		}
+		return liberrors.NewApiError(liberrors.UserError, fmt.Errorf("timestamp parsing error %s", err.Error()))
+	}
+	return liberrors.NewApiError(liberrors.UserError, fmt.Errorf("timestamp filter must be on the format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'"))
+}
+
+// deviceAttributeAuditFilters defines what filters are available for the deviceAttributeAudit model
+var deviceAttributeAuditFilters = map[string]map[string]func(string) (string, []string, error){
+	"deviceId": {
+		"eq": func(value string) (string, []string, error) {
+			if regexp.MustCompile(`^\d+$`).MatchString(value) {
+				return "deviceId = ?", []string{value}, nil
+			}
+			return "", nil, liberrors.NewApiError(liberrors.UserError, fmt.Errorf("deviceId filter must be an integer value"))
+		},
+	},
+	"name": {
+		"eq": func(value string) (string, []string, error) {
+			return "name = ?", []string{value}, nil
+		},
+	},
+	"timestamp": {
+		"eq": func(value string) (string, []string, error) {
+			return "timestamp = ?", []string{value}, validateTimestamp(value)
+		},
+		"gt": func(value string) (string, []string, error) {
+			return "timestamp > ?", []string{value}, validateTimestamp(value)
+		},
+		"lt": func(value string) (string, []string, error) {
+			return "timestamp < ?", []string{value}, validateTimestamp(value)
+		},
+	},
+	// We intentionally leave out old and new values for now
 }
 
 type GetDevicesCapabilityIntermediate struct {
@@ -166,6 +219,51 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		retDevices = append(retDevices, device)
 	}
 	return retDevices, rows.Err()
+}
+
+// GetAttributeAudits
+func (persistence mariadbPersistence) GetAttributeAudits(ctx context.Context, filters []restmodels.Filter) ([]restmodels.AttributeAudit, error) {
+	fields := []string{
+		"id",
+		"deviceId",
+		"name",
+		"timestamp",
+		"oldBooleanValue",
+		"oldNumericValue",
+		"oldTextValue",
+		"newBooleanValue",
+		"newNumericValue",
+		"newTextValue",
+	}
+	query := `SELECT ` + strings.Join(fields, ",") + ` FROM deviceAttributeAudit`
+	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, deviceAttributeAuditFilters)
+	if err != nil {
+		return nil, err
+	}
+	if len(queryFragments) > 0 {
+		query += " WHERE "
+		query += strings.Join(queryFragments, " AND ")
+	}
+	retAudits := []restmodels.AttributeAudit{}
+	rows, err := persistence.db.Query(query, variables...)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var audit restmodels.AttributeAudit
+		var timestampStr string
+		err = rows.Scan(&audit.ID, &audit.DeviceID, &audit.Name, &timestampStr, &audit.OldBooleanValue, &audit.OldNumericValue, &audit.OldTextValue, &audit.NewBooleanValue, &audit.NewNumericValue, &audit.NewTextValue)
+		if err != nil {
+			return nil, err
+		}
+		// Parse timestamp string to time.Time
+		audit.Timestamp, err = time.Parse("2006-01-02 15:04:05", timestampStr)
+		if err != nil {
+			return nil, err
+		}
+		retAudits = append(retAudits, audit)
+	}
+	return retAudits, rows.Err()
 }
 
 func toDbBoolean(value *bool) *float32 {
@@ -306,20 +404,20 @@ func (persistence mariadbPersistence) GetDeviceCapabilityForActivation(ctx conte
 	return capability, err
 }
 
-var groupFilters = map[string]map[string]func(string) (string, []string){
+var groupFilters = map[string]map[string]func(string) (string, []string, error){
 	"bridge-identifier": {
-		"eq": func(value string) (string, []string) {
-			return "bridgeIdentifier = ?", []string{value}
+		"eq": func(value string) (string, []string, error) {
+			return "bridgeIdentifier = ?", []string{value}, nil
 		},
 	},
 	"id": {
-		"eq": func(value string) (string, []string) {
-			return "id = ?", []string{value}
+		"eq": func(value string) (string, []string, error) {
+			return "id = ?", []string{value}, nil
 		},
 	},
 	"bridge-key": {
-		"eq": func(value string) (string, []string) {
-			return "bridgeKey = ?", []string{value}
+		"eq": func(value string) (string, []string, error) {
+			return "bridgeKey = ?", []string{value}, nil
 		},
 	},
 }

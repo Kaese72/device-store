@@ -83,6 +83,26 @@ func (app webApp) GetDevices(writer http.ResponseWriter, reader *http.Request) {
 	}
 }
 
+func (app webApp) GetAttributeAudits(writer http.ResponseWriter, reader *http.Request) {
+	ctx := reader.Context()
+	restAudits, err := app.persistence.GetAttributeAudits(ctx, restmodels.ParseQueryIntoFilters(reader.URL.Query()))
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+		return
+	}
+	resp, err := json.Marshal(restAudits)
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+		return
+	}
+
+	writer.WriteHeader(http.StatusOK)
+	_, err = writer.Write(resp)
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+	}
+}
+
 // StreamDeviceUpdates is a SSE endpoint that sends updates from
 func (app webApp) StreamDeviceUpdates(writer http.ResponseWriter, reader *http.Request) {
 	ctx := reader.Context()

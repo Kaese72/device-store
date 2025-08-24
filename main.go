@@ -60,6 +60,8 @@ func main() {
 	restWebapp := restwebapp.NewWebApp(dbPersistence, adapterAttendant, deviceUpdates)
 	restRouter := router.PathPrefix("/device-store/v0/").Subrouter()
 	restRouter.HandleFunc("/devices", restWebapp.GetDevices).Methods("GET")
+	restRouter.HandleFunc("/audits/attributes", restWebapp.GetAttributeAudits).Methods("GET")
+
 	restRouter.HandleFunc("/devices/events", restWebapp.StreamDeviceUpdates).Methods("GET")
 	restRouter.HandleFunc("/groups", restWebapp.GetGroups).Methods("GET")
 	restRouter.HandleFunc("/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability).Methods("POST")
@@ -70,8 +72,6 @@ func main() {
 	ingestRouter := router.PathPrefix("/device-ingest/v0/").Subrouter()
 	ingestRouter.HandleFunc("/devices", ingestWebapp.PostDevice).Methods("POST")
 	ingestRouter.HandleFunc("/groups", ingestWebapp.PostGroup).Methods("POST")
-
-	logging.Info("Successfully contacted database", context.Background())
 
 	server := &http.Server{
 		Handler: router,
