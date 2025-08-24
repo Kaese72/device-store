@@ -54,11 +54,11 @@ func main() {
 
 	router := mux.NewRouter()
 	apmgorilla.Instrument(router)
-
 	// REST WebApp
 	adapterAttendant := adapterattendant.NewAdapterAttendant(config.Loaded.AdapterAttendant)
 	restWebapp := restwebapp.NewWebApp(dbPersistence, adapterAttendant, deviceUpdates)
 	restRouter := router.PathPrefix("/device-store/v0/").Subrouter()
+	restRouter.Use(restwebapp.LoggingRecoveryMiddleware)
 	restRouter.HandleFunc("/devices", restWebapp.GetDevices).Methods("GET")
 	restRouter.HandleFunc("/audits/attributes", restWebapp.GetAttributeAudits).Methods("GET")
 
@@ -70,6 +70,7 @@ func main() {
 	// Ingest WebApp
 	ingestWebapp := ingestwebapp.NewWebApp(dbPersistence, deviceUpdateChan)
 	ingestRouter := router.PathPrefix("/device-ingest/v0/").Subrouter()
+	ingestRouter.Use(ingestwebapp.LoggingRecoveryMiddleware)
 	ingestRouter.HandleFunc("/devices", ingestWebapp.PostDevice).Methods("POST")
 	ingestRouter.HandleFunc("/groups", ingestWebapp.PostGroup).Methods("POST")
 

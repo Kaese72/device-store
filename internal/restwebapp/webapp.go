@@ -33,6 +33,18 @@ func NewWebApp(persistence persistence.RestPersistenceDB, attendant adapteratten
 	}
 }
 
+func LoggingRecoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				serveHTTPError(fmt.Errorf("recovered from panic: %v", err), r.Context(), w)
+				next.ServeHTTP(w, r)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
 func serveHTTPError(err error, ctx context.Context, writer http.ResponseWriter) {
 	var apiError *liberrors.ApiError
 	if !errors.As(err, &apiError) {

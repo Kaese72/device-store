@@ -3,6 +3,7 @@ package ingestwebapp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/Kaese72/device-store/eventmodels"
@@ -23,6 +24,18 @@ func NewWebApp(persistence persistence.IngestPersistenceDB, deviceUpdatesChan ch
 		persistence:       persistence,
 		deviceUpdatesChan: deviceUpdatesChan,
 	}
+}
+
+func LoggingRecoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				serveHTTPError(fmt.Errorf("recovered from panic: %v", err), r.Context(), w)
+				next.ServeHTTP(w, r)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func serveHTTPError(err error, ctx context.Context, writer http.ResponseWriter) {
