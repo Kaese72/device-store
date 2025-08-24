@@ -38,7 +38,8 @@ func LoggingRecoveryMiddleware(next http.Handler) http.Handler {
 		defer func() {
 			if err := recover(); err != nil {
 				serveHTTPError(fmt.Errorf("recovered from panic: %v", err), r.Context(), w)
-				next.ServeHTTP(w, r)
+				// Don't call next.ServeHTTP again after panic recovery
+				return
 			}
 		}()
 		next.ServeHTTP(w, r)
