@@ -171,6 +171,7 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var device restmodels.Device
 		var capabilitiesBytes []byte
@@ -249,6 +250,7 @@ func (persistence mariadbPersistence) GetAttributeAudits(ctx context.Context, fi
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var audit restmodels.AttributeAudit
 		var timestampStr string
@@ -347,6 +349,7 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 		if err != nil {
 			return 0, nil, err
 		}
+		defer rows.Close()
 		for rows.Next() {
 			var presentAttribute dbAttribute
 			err = rows.Scan(&presentAttribute.Name, &presentAttribute.BooleanValue, &presentAttribute.NumericValue, &presentAttribute.TextValue)
@@ -401,7 +404,7 @@ func (persistence mariadbPersistence) GetDeviceCapabilityForActivation(ctx conte
 		}
 		return intermediaries.DeviceCapabilityIntermediaryActivation{}, liberrors.NewApiError(liberrors.NotFound, fmt.Errorf("capability %s not found for device %d", capabilityName, storeIdentifier))
 	}
-	return capability, err
+	return capability, nil
 }
 
 var groupFilters = map[string]map[string]func(string) (string, []string, error){
@@ -449,6 +452,7 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, tx queryAble)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var group restmodels.Group
 		var capabilitiesBytes []byte

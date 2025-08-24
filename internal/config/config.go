@@ -21,7 +21,7 @@ type DatabaseConfig struct {
 
 func (conf DatabaseConfig) Validate() error {
 	if conf.Host == "" {
-		errors.New("must supply database host")
+		return errors.New("must supply database host")
 	}
 	return nil
 }
