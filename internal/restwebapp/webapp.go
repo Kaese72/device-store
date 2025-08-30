@@ -96,6 +96,39 @@ func (app webApp) GetDevices(writer http.ResponseWriter, reader *http.Request) {
 	}
 }
 
+func (app webApp) GetDevice(writer http.ResponseWriter, reader *http.Request) {
+	ctx := reader.Context()
+	vars := mux.Vars(reader)
+	// Create a filter for the deviceId and use the GetDevices method
+	filter := []restmodels.Filter{
+		{
+			Key:      "id",
+			Value:    vars["storeDeviceIdentifier"],
+			Operator: "eq",
+		},
+	}
+	restDevices, err := app.persistence.GetDevices(ctx, filter)
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+		return
+	}
+	if len(restDevices) == 0 {
+		serveHTTPError(liberrors.NewApiError(liberrors.NotFound, errors.New("device not found")), ctx, writer)
+		return
+	}
+	resp, err := json.Marshal(restDevices[0])
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+		return
+	}
+
+	writer.WriteHeader(http.StatusOK)
+	_, err = writer.Write(resp)
+	if err != nil {
+		serveHTTPError(err, ctx, writer)
+	}
+}
+
 func (app webApp) GetAttributeAudits(writer http.ResponseWriter, reader *http.Request) {
 	ctx := reader.Context()
 	restAudits, err := app.persistence.GetAttributeAudits(ctx, restmodels.ParseQueryIntoFilters(reader.URL.Query()))

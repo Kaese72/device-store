@@ -60,11 +60,13 @@ func main() {
 	restRouter := router.PathPrefix("/device-store/v0/").Subrouter()
 	restRouter.Use(restwebapp.LoggingRecoveryMiddleware)
 	restRouter.HandleFunc("/devices", restWebapp.GetDevices).Methods("GET")
+	restRouter.HandleFunc("/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.GetDevice).Methods("GET")
+	restRouter.HandleFunc("/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability).Methods("POST")
+	restRouter.HandleFunc("/devices/events", restWebapp.StreamDeviceUpdates).Methods("GET")
+
 	restRouter.HandleFunc("/audits/attributes", restWebapp.GetAttributeAudits).Methods("GET")
 
-	restRouter.HandleFunc("/devices/events", restWebapp.StreamDeviceUpdates).Methods("GET")
 	restRouter.HandleFunc("/groups", restWebapp.GetGroups).Methods("GET")
-	restRouter.HandleFunc("/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability).Methods("POST")
 	restRouter.HandleFunc("/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability).Methods("POST")
 
 	// Ingest WebApp
