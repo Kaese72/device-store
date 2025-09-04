@@ -1,7 +1,7 @@
 package ingestmodels
 
-type DeviceCapability struct {
+type IngestDeviceCapability struct {
 	Name string `json:"name"`
 }
 
-type DeviceCapabilityArgs map[string]interface{}
+type IngestDeviceCapabilityArgs map[string]interface{}

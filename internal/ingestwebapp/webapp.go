@@ -2,16 +2,11 @@ package ingestwebapp
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
 
 	"github.com/Kaese72/device-store/eventmodels"
 	"github.com/Kaese72/device-store/ingestmodels"
-	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence"
-	"github.com/Kaese72/huemie-lib/liberrors"
-	"github.com/pkg/errors"
+	"github.com/danielgtaylor/huma/v2"
 )
 
 type webApp struct {
@@ -26,86 +21,26 @@ func NewWebApp(persistence persistence.IngestPersistenceDB, deviceUpdatesChan ch
 	}
 }
 
-func LoggingRecoveryMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				serveHTTPError(fmt.Errorf("recovered from panic: %v", err), r.Context(), w)
-				// Don't call next.ServeHTTP again after panic recovery
-				return
-			}
-		}()
-		next.ServeHTTP(w, r)
-	})
-}
-
-func serveHTTPError(err error, ctx context.Context, writer http.ResponseWriter) {
-	var apiError *liberrors.ApiError
-	if !errors.As(err, &apiError) {
-		apiError = liberrors.NewApiError(liberrors.InternalError, errors.New("unknown internal error occured"))
+func (app webApp) PostDevice(ctx context.Context, input *struct {
+	BridgeKey string                    `header:"Bridge-Key" doc:"Bridge key for authentication"`
+	Body      ingestmodels.IngestDevice `body:""`
+}) (*struct{}, error) {
+	if input.BridgeKey == "" {
+		return nil, huma.Error400BadRequest("May not update devices when not identifying as a bridge")
 	}
-
-	if apiError.Reason <= 599 && apiError.Reason >= 500 {
-		// Internal server error, log error
-		logging.ErrorErr(err, ctx)
-	} else {
-		// For everything else, log an info. This may be excessive, but it only happens on errors
-		logging.ErrorErr(err, ctx)
-	}
-	// Safe to ignore error here... kind of but not really
-	resp, err := json.Marshal(struct {
-		Message string `json:"message"`
-	}{Message: err.Error()})
-	if err != nil {
-		logging.ErrorErr(errors.Wrap(err, "failed to marshal error message"), ctx)
-		return
-	}
-
-	writer.WriteHeader(int(apiError.Reason))
-	_, err = writer.Write(resp)
-	if err != nil {
-		logging.ErrorErr(errors.Wrap(err, "failed to write error message"), ctx)
-	}
-}
-
-func (app webApp) PostDevice(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	bridgeKey := reader.Header.Get("Bridge-Key")
-	if bridgeKey == "" {
-		http.Error(writer, "May not update devices when not identifying as a bridge", http.StatusBadRequest)
-		return
-	}
-	device := ingestmodels.Device{}
-	err := json.NewDecoder(reader.Body).Decode(&device)
-	if err != nil {
-		serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
-		return
-	}
-	// We do not trust the client that much. Override the bridgeKey
-	device.BridgeKey = bridgeKey
-
-	// FIXME local tests do not allow this. Replace with JWT authentication or something
-	// _, err = attendant.GetAdapter(bridgeKey, ctx)
-	// if err != nil {
-	// 	serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-	// 	return
-	// }
+	device := input.Body
+	device.BridgeKey = input.BridgeKey
 	deviceId, updates, err := app.persistence.PostDevice(ctx, device)
 	if err != nil {
-		serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-		return
+		return nil, err
 	}
-	writer.WriteHeader(http.StatusOK)
-	// Update the rabbitmq queue with the changed attributes after the device has been updated
-	// If this fails the device remains changed
 	if len(updates) != 0 {
-		// Only run updates if there actually are updates
 		deviceUpdateEvent := eventmodels.DeviceAttributeUpdate{
 			DeviceID:   deviceId,
-			Attributes: []eventmodels.Attribute{},
+			Attributes: []eventmodels.UpdatedAttribute{},
 		}
 		for _, update := range updates {
-			deviceUpdateEvent.Attributes = append(deviceUpdateEvent.Attributes, eventmodels.Attribute{
+			deviceUpdateEvent.Attributes = append(deviceUpdateEvent.Attributes, eventmodels.UpdatedAttribute{
 				Name:    update.Name,
 				Boolean: update.Boolean,
 				Text:    update.Text,
@@ -114,28 +49,21 @@ func (app webApp) PostDevice(writer http.ResponseWriter, reader *http.Request) {
 		}
 		app.deviceUpdatesChan <- deviceUpdateEvent
 	}
+	return &struct{}{}, nil
 }
 
-func (app webApp) PostGroup(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	bridgeKey := reader.Header.Get("Bridge-Key")
-	if bridgeKey == "" {
-		http.Error(writer, "May not update groups when not identifying as a bridge", http.StatusBadRequest)
-		return
+func (app webApp) PostGroup(ctx context.Context, input *struct {
+	BridgeKey string                   `header:"Bridge-Key" doc:"Bridge key for authentication"`
+	Body      ingestmodels.IngestGroup `body:""`
+}) (*struct{}, error) {
+	if input.BridgeKey == "" {
+		return nil, huma.Error400BadRequest("May not update groups when not identifying as a bridge")
 	}
-	group := ingestmodels.Group{}
-	err := json.NewDecoder(reader.Body).Decode(&group)
+	group := input.Body
+	group.BridgeKey = input.BridgeKey
+	err := app.persistence.PostGroup(ctx, group)
 	if err != nil {
-		serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
-		return
+		return nil, err
 	}
-	// We do not trust the client that much. Override the bridgeKey
-	group.BridgeKey = bridgeKey
-
-	err = app.persistence.PostGroup(ctx, group)
-	if err != nil {
-		serveHTTPError(liberrors.NewApiError(liberrors.InternalError, err), ctx, writer)
-		return
-	}
-	writer.WriteHeader(http.StatusOK)
+	return &struct{}{}, nil
 }

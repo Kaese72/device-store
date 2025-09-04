@@ -2,11 +2,7 @@ package restwebapp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"strconv"
 
 	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/adapters"
@@ -14,9 +10,8 @@ import (
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence"
 	"github.com/Kaese72/device-store/restmodels"
-	"github.com/Kaese72/huemie-lib/liberrors"
-	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/sse"
 )
 
 type webApp struct {
@@ -33,236 +28,136 @@ func NewWebApp(persistence persistence.RestPersistenceDB, attendant adapteratten
 	}
 }
 
-func LoggingRecoveryMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				serveHTTPError(fmt.Errorf("recovered from panic: %v", err), r.Context(), w)
-				// Don't call next.ServeHTTP again after panic recovery
-				return
-			}
-		}()
-		next.ServeHTTP(w, r)
-	})
-}
-
-func serveHTTPError(err error, ctx context.Context, writer http.ResponseWriter) {
-	var apiError *liberrors.ApiError
-	if !errors.As(err, &apiError) {
-		apiError = liberrors.NewApiError(liberrors.InternalError, errors.New("unknown internal error occured"))
-	}
-
-	if apiError.Reason <= 599 && apiError.Reason >= 500 {
-		// Internal server error, log error
-		logging.ErrorErr(err, ctx)
-	} else {
-		// For everything else, log an info. This may be excessive, but it only happens on errors
-		logging.ErrorErr(err, ctx)
-	}
-	// Safe to ignore error here... kind of but not really
-	resp, err := json.Marshal(struct {
-		Message string `json:"message"`
-	}{Message: err.Error()})
-	if err != nil {
-		logging.ErrorErr(errors.Wrap(err, "failed to marshal error message"), ctx)
-		return
-	}
-
-	writer.WriteHeader(int(apiError.Reason))
-	_, err = writer.Write(resp)
-	if err != nil {
-		logging.ErrorErr(errors.Wrap(err, "failed to write error message"), ctx)
-	}
-}
-
 // GetDevices returns all devices in the database
-func (app webApp) GetDevices(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	restDevices, err := app.persistence.GetDevices(ctx, restmodels.ParseQueryIntoFilters(reader.URL.Query()))
+func (app webApp) GetDevices(ctx context.Context, input *struct {
+	Filters string `query:"filters" doc:"a string JSON array of objects containting key, op, and value for filtering"`
+}) (*struct {
+	Body []restmodels.Device
+}, error) {
+	filters, err := restmodels.ParseQueryIntoFilters(input.Filters)
 	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
+		return nil, err
 	}
-	resp, err := json.Marshal(restDevices)
-	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
-	}
-
-	writer.WriteHeader(http.StatusOK)
-	_, err = writer.Write(resp)
-	if err != nil {
-		serveHTTPError(err, ctx, writer)
-	}
+	restDevices, err := app.persistence.GetDevices(ctx, filters)
+	return &struct {
+		Body []restmodels.Device
+	}{
+		Body: restDevices,
+	}, err
 }
 
-func (app webApp) GetDevice(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	vars := mux.Vars(reader)
+func (app webApp) GetDevice(ctx context.Context, input *struct {
+	StoreDeviceIdentifier string `path:"storeDeviceIdentifier" doc:"the ID of the device to retrieve"`
+}) (*struct {
+	Body []restmodels.Device
+}, error) {
 	// Create a filter for the deviceId and use the GetDevices method
 	filter := []restmodels.Filter{
 		{
 			Key:      "id",
-			Value:    vars["storeDeviceIdentifier"],
+			Value:    input.StoreDeviceIdentifier,
 			Operator: "eq",
 		},
 	}
 	restDevices, err := app.persistence.GetDevices(ctx, filter)
 	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
+		return nil, err
 	}
 	if len(restDevices) == 0 {
-		serveHTTPError(liberrors.NewApiError(liberrors.NotFound, errors.New("device not found")), ctx, writer)
-		return
+		return nil, huma.Error404NotFound("device not found")
 	}
-	resp, err := json.Marshal(restDevices[0])
-	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
-	}
-
-	writer.WriteHeader(http.StatusOK)
-	_, err = writer.Write(resp)
-	if err != nil {
-		serveHTTPError(err, ctx, writer)
-	}
+	return &struct {
+		Body []restmodels.Device
+	}{
+		Body: restDevices,
+	}, err
 }
 
-func (app webApp) GetAttributeAudits(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	restAudits, err := app.persistence.GetAttributeAudits(ctx, restmodels.ParseQueryIntoFilters(reader.URL.Query()))
+func (app webApp) GetAttributeAudits(ctx context.Context, input *struct {
+	Filters string `query:"filters" doc:"a string JSON array of objects containing key, op, and value for filtering"`
+}) (*struct {
+	Body []restmodels.AttributeAudit
+}, error) {
+	filters, err := restmodels.ParseQueryIntoFilters(input.Filters)
 	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
+		return nil, err
 	}
-	resp, err := json.Marshal(restAudits)
+	restAudits, err := app.persistence.GetAttributeAudits(ctx, filters)
 	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
+		return nil, err
 	}
-
-	writer.WriteHeader(http.StatusOK)
-	_, err = writer.Write(resp)
-	if err != nil {
-		serveHTTPError(err, ctx, writer)
-	}
+	return &struct{ Body []restmodels.AttributeAudit }{Body: restAudits}, nil
 }
 
 // StreamDeviceUpdates is a SSE endpoint that sends updates from
-func (app webApp) StreamDeviceUpdates(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	// Set headers for SSE
-	writer.Header().Set("Content-Type", "text/event-stream")
-	writer.Header().Set("Cache-Control", "no-cache")
-	writer.Header().Set("Connection", "keep-alive")
+func (app webApp) StreamDeviceUpdates(ctx context.Context, input *struct{}, send sse.Sender) {
 	// writer.Header().Set("Access-Control-Allow-Origin", "*")
 	deviceUpdates := app.events.Subscribe(ctx)
 	for update := range deviceUpdates {
-		resp, err := json.Marshal(update)
-		if err != nil {
+		if err := send.Data(update); err != nil {
 			// Even though this is a critical error, we continue
 			logging.ErrorErr(err, ctx)
 			continue
 		}
-		writer.Write([]byte("data: " + string(resp) + "\n\n"))
-		writer.(http.Flusher).Flush()
 	}
 }
 
-func (app webApp) TriggerDeviceCapability(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	vars := mux.Vars(reader)
-	// Because of regex above this will never happen
-	storeDeviceIdentifier, _ := strconv.Atoi(vars["storeDeviceIdentifier"])
-	capabilityID := vars["capabilityID"]
-	capArg := restmodels.DeviceCapabilityArgs{}
-	err := json.NewDecoder(reader.Body).Decode(&capArg)
+func (app webApp) TriggerDeviceCapability(ctx context.Context, input *struct {
+	StoreDeviceIdentifier int                             `path:"storeDeviceIdentifier" doc:"the ID of the device to trigger capability for"`
+	CapabilityID          string                          `path:"capabilityID" doc:"the capability to trigger"`
+	Body                  restmodels.DeviceCapabilityArgs `body:""`
+}) (*struct{}, error) {
+	logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%d'", input.CapabilityID, input.StoreDeviceIdentifier), ctx)
+	capability, err := app.persistence.GetDeviceCapabilityForActivation(ctx, input.StoreDeviceIdentifier, input.CapabilityID)
 	if err != nil {
-		if err == io.EOF {
-			capArg = restmodels.DeviceCapabilityArgs{}
-
-		} else {
-			serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
-			return
-		}
-
+		return nil, err
 	}
-
-	logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%d'", capabilityID, storeDeviceIdentifier), ctx)
-	capability, err := app.persistence.GetDeviceCapabilityForActivation(ctx, storeDeviceIdentifier, capabilityID)
-	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
-	}
-
 	adapter, err := app.attendant.GetAdapter(string(capability.BridgeKey), ctx)
 	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
+		return nil, err
 	}
-	sysErr := adapters.TriggerDeviceCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, capArg)
+	sysErr := adapters.TriggerDeviceCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, input.Body)
 	if sysErr != nil {
-		serveHTTPError(sysErr, ctx, writer)
-		return
+		return nil, sysErr
 	}
 	logging.Info("Capability seemingly successfully triggered", ctx)
+	return &struct{}{}, nil
 }
 
-func (app webApp) GetGroups(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	restGroups, err := app.persistence.GetGroups(ctx, restmodels.ParseQueryIntoFilters(reader.URL.Query()))
+func (app webApp) TriggerGroupCapability(ctx context.Context, input *struct {
+	StoreGroupIdentifier int                             `path:"storeGroupIdentifier" doc:"the ID of the group to trigger capability for"`
+	CapabilityID         string                          `path:"capabilityID" doc:"the capability to trigger"`
+	Body                 restmodels.DeviceCapabilityArgs `body:""`
+}) (*struct{}, error) {
+	logging.Info(fmt.Sprintf("Triggering capability '%s' of group '%d'", input.CapabilityID, input.StoreGroupIdentifier), ctx)
+	capability, err := app.persistence.GetGroupCapabilityForActivation(ctx, input.StoreGroupIdentifier, input.CapabilityID)
 	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
+		return nil, err
 	}
-	resp, err := json.Marshal(restGroups)
-	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
-	}
-
-	writer.WriteHeader(http.StatusOK)
-	_, err = writer.Write(resp)
-	if err != nil {
-		serveHTTPError(err, ctx, writer)
-	}
-}
-
-func (app webApp) TriggerGroupCapability(writer http.ResponseWriter, reader *http.Request) {
-	ctx := reader.Context()
-	vars := mux.Vars(reader)
-	storeGroupIdentifier, _ := strconv.Atoi(vars["storeGroupIdentifier"])
-	capabilityID := vars["capabilityID"]
-	capArg := restmodels.DeviceCapabilityArgs{}
-	err := json.NewDecoder(reader.Body).Decode(&capArg)
-	if err != nil {
-		if err == io.EOF {
-			capArg = restmodels.DeviceCapabilityArgs{}
-
-		} else {
-			serveHTTPError(liberrors.NewApiError(liberrors.UserError, err), ctx, writer)
-			return
-		}
-
-	}
-
-	logging.Info(fmt.Sprintf("Triggering capability '%s' of group '%d'", capabilityID, storeGroupIdentifier), ctx)
-	capability, err := app.persistence.GetGroupCapabilityForActivation(ctx, storeGroupIdentifier, capabilityID)
-	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
-	}
-
 	adapter, err := app.attendant.GetAdapter(string(capability.BridgeKey), ctx)
 	if err != nil {
-		serveHTTPError(err, ctx, writer)
-		return
+		return nil, err
 	}
-	sysErr := adapters.TriggerGroupCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, capArg)
+	sysErr := adapters.TriggerGroupCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, input.Body)
 	if sysErr != nil {
-		serveHTTPError(sysErr, ctx, writer)
-		return
+		return nil, sysErr
 	}
 	logging.Info("Capability seemingly successfully triggered", ctx)
+	return &struct{}{}, nil
+}
+
+func (app webApp) GetGroups(ctx context.Context, input *struct {
+	Filters string `query:"filters" doc:"a string JSON array of objects containing key, op, and value for filtering"`
+}) (*struct {
+	Body []restmodels.Group
+}, error) {
+	filters, err := restmodels.ParseQueryIntoFilters(input.Filters)
+	if err != nil {
+		return nil, err
+	}
+	restGroups, err := app.persistence.GetGroups(ctx, filters)
+	if err != nil {
+		return nil, err
+	}
+	return &struct{ Body []restmodels.Group }{Body: restGroups}, nil
 }

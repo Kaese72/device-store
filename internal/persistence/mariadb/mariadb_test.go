@@ -10,7 +10,7 @@ func TestEqualRest(t *testing.T) {
 	tests := []struct {
 		name     string
 		dbAttr   dbAttribute
-		restAttr ingestmodels.Attribute
+		restAttr ingestmodels.IngestAttribute
 		expected bool
 	}{
 		{
@@ -21,7 +21,7 @@ func TestEqualRest(t *testing.T) {
 				NumericValue: ptrFloat32(25.5),
 				TextValue:    ptrString("hot"),
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name:    "irrelevant",
 				Boolean: ptrBool(true),
 				Numeric: ptrFloat32(25.5),
@@ -34,7 +34,7 @@ func TestEqualRest(t *testing.T) {
 			dbAttr: dbAttribute{
 				Name: "humidity",
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name: "temperature",
 			},
 			expected: false,
@@ -45,7 +45,7 @@ func TestEqualRest(t *testing.T) {
 				Name:         "irrelevant",
 				BooleanValue: toDbBoolean(ptrBool(false)),
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name:    "irrelevant",
 				Boolean: ptrBool(true),
 			},
@@ -57,7 +57,7 @@ func TestEqualRest(t *testing.T) {
 				Name:         "irrelevant",
 				BooleanValue: nil,
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name:    "irrelevant",
 				Boolean: ptrBool(true),
 			},
@@ -69,7 +69,7 @@ func TestEqualRest(t *testing.T) {
 				Name:         "irrelevant",
 				BooleanValue: toDbBoolean(ptrBool(true)),
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name:    "irrelevant",
 				Boolean: nil,
 			},
@@ -81,7 +81,7 @@ func TestEqualRest(t *testing.T) {
 				Name:         "irrelevant",
 				BooleanValue: nil,
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name:    "irrelevant",
 				Boolean: ptrBool(true),
 			},
@@ -93,7 +93,7 @@ func TestEqualRest(t *testing.T) {
 				Name:         "irrelevant",
 				NumericValue: ptrFloat32(20.0),
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name:    "irrelevant",
 				Numeric: ptrFloat32(25.0),
 			},
@@ -105,7 +105,7 @@ func TestEqualRest(t *testing.T) {
 				Name:         "irrelevant",
 				NumericValue: ptrFloat32(20.0),
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name:    "irrelevant",
 				Numeric: nil,
 			},
@@ -117,7 +117,7 @@ func TestEqualRest(t *testing.T) {
 				Name:      "irrelevant",
 				TextValue: ptrString("cold"),
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name: "irrelevant",
 				Text: ptrString("hot"),
 			},
@@ -129,7 +129,7 @@ func TestEqualRest(t *testing.T) {
 				Name:         "irrelevant",
 				BooleanValue: nil,
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name:    "irrelevant",
 				Boolean: nil,
 			},
@@ -141,7 +141,7 @@ func TestEqualRest(t *testing.T) {
 				Name:         "irrelevant",
 				NumericValue: nil,
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name:    "irrelevant",
 				Numeric: nil,
 			},
@@ -153,7 +153,7 @@ func TestEqualRest(t *testing.T) {
 				Name:      "irrelevant",
 				TextValue: nil,
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name: "irrelevant",
 				Text: nil,
 			},
@@ -165,7 +165,7 @@ func TestEqualRest(t *testing.T) {
 				Name:      "irrelevant",
 				TextValue: nil,
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name: "irrelevant",
 				Text: ptrString("hot"),
 			},
@@ -178,7 +178,7 @@ func TestEqualRest(t *testing.T) {
 				TextValue:    nil,
 				BooleanValue: toDbBoolean(ptrBool(true)),
 			},
-			restAttr: ingestmodels.Attribute{
+			restAttr: ingestmodels.IngestAttribute{
 				Name:    "irrelevant",
 				Text:    nil,
 				Boolean: ptrBool(false),

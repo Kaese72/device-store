@@ -1,6 +1,10 @@
 package restmodels
 
-import "regexp"
+import (
+	"encoding/json"
+
+	"github.com/danielgtaylor/huma/v2"
+)
 
 // this file describes how to use filters
 // The filter is on the format "key[operator]=value"
@@ -12,27 +16,21 @@ import "regexp"
 // attribute closer to the database layer.
 
 type Filter struct {
-	Operator string
-	Key      string
-	Value    string
+	Operator string `json:"op"`
+	Key      string `json:"key"`
+	Value    string `json:"value"`
 }
 
-var queryKeyRegex = regexp.MustCompile(`^(.+)\[(.+)\]$`)
-
-func ParseQueryIntoFilters(queryParameters map[string][]string) []Filter {
-	// Each query parameter is on the format "key[operator]=value"
+func ParseQueryIntoFilters(filterString string) ([]Filter, error) {
+	// The filter string is a JSON blob we can decode into the Filters type
 	filters := []Filter{}
-	for queryKey, queryKeyValues := range queryParameters {
-		found := queryKeyRegex.FindStringSubmatch(queryKey)
-		if found == nil {
-			// Not a valid query parameter... ignore
-			continue
-		}
-		for _, queryParameter := range queryKeyValues {
-			// Split the query parameter into key, operator and value
-
-			filters = append(filters, Filter{Operator: found[2], Key: found[1], Value: queryParameter})
-		}
+	if filterString == "" {
+		return filters, nil
 	}
-	return filters
+	// json unmarshal
+	err := json.Unmarshal([]byte(filterString), &filters)
+	if err != nil {
+		return filters, huma.Error404NotFound(err.Error())
+	}
+	return filters, nil
 }

@@ -12,7 +12,7 @@ import (
 	adapterattendantmodels "github.com/Kaese72/adapter-attendant/rest/models"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/restmodels"
-	"github.com/Kaese72/huemie-lib/liberrors"
+	"github.com/danielgtaylor/huma/v2"
 	"go.elastic.co/apm/module/apmhttp/v2"
 	"golang.org/x/net/context/ctxhttp"
 )
@@ -22,12 +22,12 @@ var tracingClient = apmhttp.WrapClient(http.DefaultClient)
 func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, bridgeDeviceIdentifier string, capabilityID string, capArg restmodels.DeviceCapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)
 	if err != nil {
-		return liberrors.NewApiError(liberrors.UserError, err)
+		return huma.Error400BadRequest(err.Error())
 	}
 
 	adapterURL, err := url.Parse(adapter.Address)
 	if err != nil {
-		return liberrors.NewApiError(liberrors.InternalError, err)
+		return err
 	}
 
 	adapterURL.Path = fmt.Sprintf("devices/%s/capabilities/%s", bridgeDeviceIdentifier, capabilityID)
@@ -36,12 +36,12 @@ func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels
 	if err != nil {
 		// FIXME What if there is interesting debug information in the response?
 		// We should log it or incorporate it in the response message or something
-		return liberrors.NewApiError(liberrors.InternalError, err)
+		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		logging.Info("Capability failed to trigger", ctx, map[string]interface{}{"rCode": strconv.Itoa(resp.StatusCode)})
-		return liberrors.NewApiError(liberrors.InternalError, fmt.Errorf("not HTTP/200, %d", resp.StatusCode))
+		return huma.Error500InternalServerError(fmt.Sprintf("not HTTP/200, %d", resp.StatusCode))
 	}
 	// It is the callers responsibility to Close the body reader
 	// But there should not be anything of interest here at the moment
@@ -52,12 +52,12 @@ func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels
 func TriggerGroupCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, groupId string, capabilityId string, capArg restmodels.DeviceCapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)
 	if err != nil {
-		return liberrors.NewApiError(liberrors.UserError, err)
+		return huma.Error400BadRequest(err.Error())
 	}
 
 	adapterURL, err := url.Parse(adapter.Address)
 	if err != nil {
-		return liberrors.NewApiError(liberrors.InternalError, err)
+		return err
 	}
 
 	adapterURL.Path = fmt.Sprintf("groups/%s/capabilities/%s", groupId, capabilityId)
@@ -66,7 +66,7 @@ func TriggerGroupCapability(ctx context.Context, adapter adapterattendantmodels.
 	if err != nil {
 		// FIXME What if there is interesting debug information in the response?
 		// We should log it or incorporate it in the response message or something
-		return liberrors.NewApiError(liberrors.InternalError, err)
+		return err
 	}
 	// It is the callers responsibility to Close the body reader
 	// But there should not be anything of interest here at the moment

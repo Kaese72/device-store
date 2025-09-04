@@ -1,6 +1,6 @@
 package ingestmodels
 
-type Attribute struct {
+type IngestAttribute struct {
 	Name    string   `json:"name"`
 	Boolean *bool    `json:"boolean-state,omitempty"`
 	Numeric *float32 `json:"numeric-state,omitempty"`

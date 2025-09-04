@@ -1,7 +1,7 @@
 package ingestmodels
 
-type GroupCapability struct {
+type IngestGroupCapability struct {
 	Name string `json:"name"`
 }
 
-type GroupCapabilityArgs map[string]interface{}
+type IngestAttributeGroupCapabilityArgs map[string]interface{}

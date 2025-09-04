@@ -16,7 +16,7 @@ import (
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence/intermediaries"
 	"github.com/Kaese72/device-store/restmodels"
-	"github.com/Kaese72/huemie-lib/liberrors"
+	"github.com/danielgtaylor/huma/v2"
 	"go.elastic.co/apm/module/apmsql"
 )
 
@@ -47,7 +47,7 @@ var deviceFilters = map[string]map[string]func(string) (string, []string, error)
 			if regexp.MustCompile(`^\d+$`).MatchString(value) {
 				return "id = ?", []string{value}, nil
 			}
-			return "", nil, liberrors.NewApiError(liberrors.UserError, fmt.Errorf("id filter must be an integer value"))
+			return "", nil, huma.Error400BadRequest("id filter must be an integer value")
 		},
 	},
 }
@@ -59,16 +59,16 @@ func validateTimestamp(value string) error {
 		if err == nil {
 			return nil
 		}
-		return liberrors.NewApiError(liberrors.UserError, fmt.Errorf("timestamp parsing error %s", err.Error()))
+		return huma.Error400BadRequest(fmt.Sprintf("timestamp parsing error %s", err.Error()))
 	}
 	if regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`).MatchString(value) {
 		_, err := time.Parse("2006-01-02", value)
 		if err == nil {
 			return nil
 		}
-		return liberrors.NewApiError(liberrors.UserError, fmt.Errorf("timestamp parsing error %s", err.Error()))
+		return huma.Error400BadRequest(fmt.Sprintf("timestamp parsing error %s", err.Error()))
 	}
-	return liberrors.NewApiError(liberrors.UserError, fmt.Errorf("timestamp filter must be on the format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'"))
+	return huma.Error400BadRequest("timestamp filter must be on the format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'")
 }
 
 // deviceAttributeAuditFilters defines what filters are available for the deviceAttributeAudit model
@@ -78,7 +78,7 @@ var deviceAttributeAuditFilters = map[string]map[string]func(string) (string, []
 			if regexp.MustCompile(`^\d+$`).MatchString(value) {
 				return "deviceId = ?", []string{value}, nil
 			}
-			return "", nil, liberrors.NewApiError(liberrors.UserError, fmt.Errorf("deviceId filter must be an integer value"))
+			return "", nil, huma.Error400BadRequest("deviceId filter must be an integer value")
 		},
 	},
 	"name": {
@@ -286,7 +286,7 @@ type dbAttribute struct {
 }
 
 // Equal checks whether two dbAttributes are equal.
-func (a dbAttribute) EqualRest(other ingestmodels.Attribute) bool {
+func (a dbAttribute) EqualRest(other ingestmodels.IngestAttribute) bool {
 	if a.Name != other.Name {
 		return false
 	}
@@ -320,7 +320,7 @@ func (a dbAttribute) EqualRest(other ingestmodels.Attribute) bool {
 	return true
 }
 
-func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ingestmodels.Device) (int, []ingestmodels.Attribute, error) {
+func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ingestmodels.IngestDevice) (int, []ingestmodels.IngestAttribute, error) {
 	var foundId int
 	tx, err := persistence.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -359,7 +359,7 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 			presentAttributes[presentAttribute.Name] = presentAttribute
 		}
 	}
-	var updatedAttributes []ingestmodels.Attribute
+	var updatedAttributes []ingestmodels.IngestAttribute
 	for _, attribute := range device.Attributes {
 		// If the attributes is already present and is different, update it record for event updates later
 		if presentAttribute, ok := presentAttributes[attribute.Name]; ok {
@@ -402,7 +402,7 @@ func (persistence mariadbPersistence) GetDeviceCapabilityForActivation(ctx conte
 		if err != sql.ErrNoRows {
 			return intermediaries.DeviceCapabilityIntermediaryActivation{}, err
 		}
-		return intermediaries.DeviceCapabilityIntermediaryActivation{}, liberrors.NewApiError(liberrors.NotFound, fmt.Errorf("capability %s not found for device %d", capabilityName, storeIdentifier))
+		return intermediaries.DeviceCapabilityIntermediaryActivation{}, huma.Error404NotFound(fmt.Sprintf("capability %s not found for device %d", capabilityName, storeIdentifier))
 	}
 	return capability, nil
 }
@@ -474,7 +474,7 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, tx queryAble)
 	return groups, rows.Err()
 }
 
-func (persistence mariadbPersistence) PostGroup(ctx context.Context, group ingestmodels.Group) error {
+func (persistence mariadbPersistence) PostGroup(ctx context.Context, group ingestmodels.IngestGroup) error {
 	tx, err := persistence.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -487,7 +487,7 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inges
 	return tx.Commit()
 }
 
-func postGroupTx(ctx context.Context, group ingestmodels.Group, tx queryAble) error {
+func postGroupTx(ctx context.Context, group ingestmodels.IngestGroup, tx queryAble) error {
 	foundGroups, err := getGroupsTx(ctx, []restmodels.Filter{{
 		Key:      "bridge-identifier",
 		Operator: "eq",
@@ -559,7 +559,7 @@ func (persistence mariadbPersistence) GetGroupCapabilityForActivation(ctx contex
 		if err != sql.ErrNoRows {
 			return intermediaries.GroupCapabilityIntermediaryActivation{}, err
 		}
-		return intermediaries.GroupCapabilityIntermediaryActivation{}, liberrors.NewApiError(liberrors.NotFound, fmt.Errorf("capability %s not found for group %d", capabilityName, storeIdentifier))
+		return intermediaries.GroupCapabilityIntermediaryActivation{}, huma.Error404NotFound(fmt.Sprintf("capability %s not found for group %d", capabilityName, storeIdentifier))
 	}
 	return capability, err
 }

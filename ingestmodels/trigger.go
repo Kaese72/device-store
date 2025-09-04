@@ -1,5 +1,5 @@
 package ingestmodels
 
-type Trigger struct {
+type IngestTrigger struct {
 	Name string `json:"name"`
 }

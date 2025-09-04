@@ -1,6 +1,6 @@
 package eventmodels
 
-type Attribute struct {
+type UpdatedAttribute struct {
 	Name    string   `json:"name"`
 	Boolean *bool    `json:"boolean-state,omitempty"`
 	Numeric *float32 `json:"numeric-state,omitempty"`
@@ -8,6 +8,6 @@ type Attribute struct {
 }
 
 type DeviceAttributeUpdate struct {
-	DeviceID   int         `json:"device-id"`
-	Attributes []Attribute `json:"attributes"`
+	DeviceID   int                `json:"device-id"`
+	Attributes []UpdatedAttribute `json:"attributes"`
 }

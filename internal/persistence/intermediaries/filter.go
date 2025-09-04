@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Kaese72/device-store/restmodels"
+	"github.com/danielgtaylor/huma/v2"
 )
 
 func TranslateFiltersToQueryFragments(filters []restmodels.Filter, filterMap map[string]map[string]func(string) (string, []string, error)) ([]string, []any, error) {
@@ -22,11 +23,11 @@ func TranslateFiltersToQueryFragments(filters []restmodels.Filter, filterMap map
 				}
 
 			} else {
-				return nil, nil, fmt.Errorf("may not filter with operator, %s, on attribute, %s", filter.Operator, filter.Key)
+				return nil, nil, huma.Error400BadRequest(fmt.Sprintf("may not filter with operator, %s, on attribute, %s", filter.Operator, filter.Key))
 
 			}
 		} else {
-			return nil, nil, fmt.Errorf("may not filter on attribute, %s", filter.Key)
+			return nil, nil, huma.Error400BadRequest(fmt.Sprintf("may not filter on attribute, %s", filter.Key))
 		}
 	}
 	return whereClauses, values, nil
