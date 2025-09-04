@@ -49,7 +49,7 @@ func (app webApp) GetDevices(ctx context.Context, input *struct {
 func (app webApp) GetDevice(ctx context.Context, input *struct {
 	StoreDeviceIdentifier string `path:"storeDeviceIdentifier" doc:"the ID of the device to retrieve"`
 }) (*struct {
-	Body []restmodels.Device
+	Body restmodels.Device
 }, error) {
 	// Create a filter for the deviceId and use the GetDevices method
 	filter := []restmodels.Filter{
@@ -67,9 +67,9 @@ func (app webApp) GetDevice(ctx context.Context, input *struct {
 		return nil, huma.Error404NotFound("device not found")
 	}
 	return &struct {
-		Body []restmodels.Device
+		Body restmodels.Device
 	}{
-		Body: restDevices,
+		Body: restDevices[0],
 	}, err
 }
 
