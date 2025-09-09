@@ -103,9 +103,9 @@ func (app webApp) StreamDeviceUpdates(ctx context.Context, input *struct{}, send
 }
 
 func (app webApp) TriggerDeviceCapability(ctx context.Context, input *struct {
-	StoreDeviceIdentifier int                             `path:"storeDeviceIdentifier" doc:"the ID of the device to trigger capability for"`
-	CapabilityID          string                          `path:"capabilityID" doc:"the capability to trigger"`
-	Body                  restmodels.DeviceCapabilityArgs `body:""`
+	StoreDeviceIdentifier int                              `path:"storeDeviceIdentifier" doc:"the ID of the device to trigger capability for"`
+	CapabilityID          string                           `path:"capabilityID" doc:"the capability to trigger"`
+	Body                  *restmodels.DeviceCapabilityArgs `body:""`
 }) (*struct{}, error) {
 	logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%d'", input.CapabilityID, input.StoreDeviceIdentifier), ctx)
 	capability, err := app.persistence.GetDeviceCapabilityForActivation(ctx, input.StoreDeviceIdentifier, input.CapabilityID)
@@ -116,7 +116,11 @@ func (app webApp) TriggerDeviceCapability(ctx context.Context, input *struct {
 	if err != nil {
 		return nil, err
 	}
-	sysErr := adapters.TriggerDeviceCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, input.Body)
+	capArg := restmodels.DeviceCapabilityArgs{}
+	if input.Body != nil {
+		capArg = *input.Body
+	}
+	sysErr := adapters.TriggerDeviceCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, capArg)
 	if sysErr != nil {
 		return nil, sysErr
 	}
@@ -125,9 +129,9 @@ func (app webApp) TriggerDeviceCapability(ctx context.Context, input *struct {
 }
 
 func (app webApp) TriggerGroupCapability(ctx context.Context, input *struct {
-	StoreGroupIdentifier int                             `path:"storeGroupIdentifier" doc:"the ID of the group to trigger capability for"`
-	CapabilityID         string                          `path:"capabilityID" doc:"the capability to trigger"`
-	Body                 restmodels.DeviceCapabilityArgs `body:""`
+	StoreGroupIdentifier int                              `path:"storeGroupIdentifier" doc:"the ID of the group to trigger capability for"`
+	CapabilityID         string                           `path:"capabilityID" doc:"the capability to trigger"`
+	Body                 *restmodels.DeviceCapabilityArgs `body:""`
 }) (*struct{}, error) {
 	logging.Info(fmt.Sprintf("Triggering capability '%s' of group '%d'", input.CapabilityID, input.StoreGroupIdentifier), ctx)
 	capability, err := app.persistence.GetGroupCapabilityForActivation(ctx, input.StoreGroupIdentifier, input.CapabilityID)
@@ -138,7 +142,11 @@ func (app webApp) TriggerGroupCapability(ctx context.Context, input *struct {
 	if err != nil {
 		return nil, err
 	}
-	sysErr := adapters.TriggerGroupCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, input.Body)
+	capArgs := restmodels.DeviceCapabilityArgs{}
+	if input.Body != nil {
+		capArgs = *input.Body
+	}
+	sysErr := adapters.TriggerGroupCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, capArgs)
 	if sysErr != nil {
 		return nil, sysErr
 	}
