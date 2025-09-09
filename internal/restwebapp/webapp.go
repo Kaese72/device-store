@@ -169,3 +169,26 @@ func (app webApp) GetGroups(ctx context.Context, input *struct {
 	}
 	return &struct{ Body []restmodels.Group }{Body: restGroups}, nil
 }
+
+func (app webApp) GetGroup(ctx context.Context, input *struct {
+	StoreGroupIdentifier string `path:"storeGroupIdentifier" doc:"the ID of the group to retrieve"`
+}) (*struct {
+	Body restmodels.Group
+}, error) {
+	// Create a filter for the groupId and use the GetGroups method
+	filter := []restmodels.Filter{
+		{
+			Key:      "id",
+			Operator: "eq",
+			Value:    input.StoreGroupIdentifier,
+		},
+	}
+	restGroups, err := app.persistence.GetGroups(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(restGroups) == 0 {
+		return nil, huma.Error404NotFound("group not found")
+	}
+	return &struct{ Body restmodels.Group }{Body: restGroups[0]}, nil
+}

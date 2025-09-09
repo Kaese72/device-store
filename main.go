@@ -85,6 +85,7 @@ func main() {
 	huma.Get(api, "/device-store/v0/audits/attributes", restWebapp.GetAttributeAudits)
 
 	huma.Get(api, "/device-store/v0/groups", restWebapp.GetGroups)
+	huma.Get(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.GetGroup)
 	huma.Post(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability)
 
 	// // Device Ingest endpoints
