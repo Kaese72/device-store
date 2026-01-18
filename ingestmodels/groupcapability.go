@@ -5,4 +5,4 @@ type IngestGroupCapability struct {
 	ArgumentsJsonSchema IngestArgumentsJsonSchema `json:"arguments-json-schema"`
 }
 
-type IngestAttributeGroupCapabilityArgs map[string]any
+type IngestGroupCapabilityArgs map[string]any
