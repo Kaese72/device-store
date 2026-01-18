@@ -370,17 +370,23 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 				}
 				updatedAttributes = append(updatedAttributes, attribute)
 			}
+			// If equal, do nothing ...
 		} else {
 			// If the attribute is not present, insert it
 			_, err = tx.ExecContext(ctx, `INSERT INTO deviceAttributes (deviceId, name, booleanValue, numericValue, textValue) VALUES (?, ?, ?, ?, ?)`, deviceId, attribute.Name, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text)
+			if err != nil {
+				return 0, nil, err
+			}
 			updatedAttributes = append(updatedAttributes, attribute)
-		}
-		if err != nil {
-			return 0, nil, err
 		}
 	}
 	for _, capability := range device.Capabilities {
-		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO deviceCapabilities (deviceId, name) VALUES (?, ?)`, deviceId, capability.Name)
+		// JSON encode ArgumentsJsonSchema so it can be saved in the database
+		argumentsJsonSchema, err := json.Marshal(capability.ArgumentsJsonSchema)
+		if err != nil {
+			return 0, nil, err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO deviceCapabilities (deviceId, name, argumentJsonSchema) VALUES (?, ?, ?)`, deviceId, capability.Name, argumentsJsonSchema)
 		if err != nil {
 			return 0, nil, err
 		}
