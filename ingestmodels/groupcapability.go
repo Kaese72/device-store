@@ -1,8 +1,8 @@
 package ingestmodels
 
 type IngestGroupCapability struct {
-	Name                string                    `json:"name"`
-	ArgumentsJsonSchema IngestArgumentsJsonSchema `json:"arguments-json-schema"`
+	Name          string               `json:"name"`
+	ArgumentSpecs []IngestArgumentSpec `json:"argument-specs"`
 }
 
 type IngestGroupCapabilityArgs map[string]any

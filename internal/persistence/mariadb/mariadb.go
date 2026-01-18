@@ -382,7 +382,7 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 	}
 	for _, capability := range device.Capabilities {
 		// JSON encode ArgumentsJsonSchema so it can be saved in the database
-		argumentsJsonSchema, err := json.Marshal(capability.ArgumentsJsonSchema)
+		argumentsJsonSchema, err := json.Marshal(capability.ArgumentSpecs)
 		if err != nil {
 			return 0, nil, err
 		}
