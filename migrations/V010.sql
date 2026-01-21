@@ -1,0 +1,1 @@
+ALTER TABLE deviceCapabilities DROP COLUMN lastSeen;
