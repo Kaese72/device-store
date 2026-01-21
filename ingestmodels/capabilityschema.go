@@ -45,8 +45,3 @@ func (i IngestArgumentSpec) Resolve(ctx huma.Context, prefix *huma.PathBuffer) [
 
 // Make sure that we fulfil the correct interface for validation to work
 var _ huma.ResolverWithPath = (*IngestArgumentSpec)(nil)
-
-// IngetArgumentSpec defines what arguments can be sent to the capability trigger
-type IngetArgumentSpecs struct {
-	Arguments []IngestArgumentSpec `json:"arguments"`
-}

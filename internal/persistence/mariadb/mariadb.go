@@ -101,12 +101,57 @@ var deviceAttributeAuditFilters = map[string]map[string]func(string) (string, []
 }
 
 type GetDevicesCapabilityIntermediate struct {
-	Name string `json:"name"`
+	Name          string `json:"name"`
+	ArgumentSpecs []struct {
+		Name    string `json:"name"`
+		Boolean *struct {
+			Default *bool `json:"default,omitempty"`
+		} `json:"boolean,omitempty"`
+		Numeric *struct {
+			Min     float32  `json:"min"`
+			Max     float32  `json:"max"`
+			Default *float32 `json:"default,omitempty"`
+		} `json:"numeric,omitempty"`
+		Text *struct {
+			Default *string `json:"default,omitempty"`
+			Min     *int    `json:"min,omitempty"`
+			Max     *int    `json:"max,omitempty"`
+		} `json:"text,omitempty"`
+	} `json:"argument-specs"`
 }
 
 func (i GetDevicesCapabilityIntermediate) toRest() restmodels.DeviceCapability {
 	return restmodels.DeviceCapability{
 		Name: i.Name,
+		ArgumentSpecs: func() []restmodels.ArgumentSpec {
+			var specs []restmodels.ArgumentSpec
+			for _, argSpec := range i.ArgumentSpecs {
+				spec := restmodels.ArgumentSpec{
+					Name: argSpec.Name,
+				}
+				if argSpec.Boolean != nil {
+					spec.Boolean = &restmodels.BooleanArgumentSpec{
+						Default: argSpec.Boolean.Default,
+					}
+				}
+				if argSpec.Numeric != nil {
+					spec.Numeric = &restmodels.NumericArgumentSpec{
+						Min:     argSpec.Numeric.Min,
+						Max:     argSpec.Numeric.Max,
+						Default: argSpec.Numeric.Default,
+					}
+				}
+				if argSpec.Text != nil {
+					spec.Text = &restmodels.TextArgumentSpec{
+						Default: argSpec.Text.Default,
+						Min:     argSpec.Text.Min,
+						Max:     argSpec.Text.Max,
+					}
+				}
+				specs = append(specs, spec)
+			}
+			return specs
+		}(),
 	}
 }
 
@@ -153,7 +198,7 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		"bridgeIdentifier",
 		"bridgeKey",
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"boolean\", booleanValue, \"numeric\", numericValue, \"text\", textValue)), JSON_ARRAY()) FROM deviceAttributes WHERE deviceAttributes.deviceId = devices.id) as attributes",
-		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceCapabilities WHERE deviceId = devices.id) as capabilities",
+		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"argument-specs\", argumentJsonSchema)), JSON_ARRAY()) FROM deviceCapabilities WHERE deviceId = devices.id) as capabilities",
 		"(SELECT COALESCE(JSON_ARRAYAGG(groupId), JSON_ARRAY()) FROM groupDevices WHERE deviceId = devices.id) as groupIds",
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceTriggers WHERE deviceTriggers.deviceId = devices.id) as triggers",
 	}
@@ -386,7 +431,7 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 		if err != nil {
 			return 0, nil, err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO deviceCapabilities (deviceId, name, argumentJsonSchema) VALUES (?, ?, ?)`, deviceId, capability.Name, argumentsJsonSchema)
+		_, err = tx.ExecContext(ctx, `INSERT INTO deviceCapabilities (deviceId, name, argumentJsonSchema) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE argumentJsonSchema = VALUES(argumentJsonSchema)`, deviceId, capability.Name, argumentsJsonSchema)
 		if err != nil {
 			return 0, nil, err
 		}
