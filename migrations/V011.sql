@@ -1,4 +1,3 @@
---- Since we do not implement backwards compatability for this change, we will just have the system reset itself
 DELETE FROM devices CASCADE;
 ALTER TABLE devices DROP INDEX unique_identifier_per_bridge;
 ALTER TABLE devices DROP COLUMN bridgeKey;
