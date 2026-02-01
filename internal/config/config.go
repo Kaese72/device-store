@@ -27,7 +27,7 @@ func (conf DatabaseConfig) Validate() error {
 }
 
 type EventConfig struct {
-	DeviceUpdatesTopic string `json:"deviceUpdates" mapstructure:"deviceUpdates"`
+	DeviceUpdatesTopic string `json:"device-updates" mapstructure:"device-updates"`
 	ConnectionString   string `json:"connectionString" mapstructure:"connectionString"`
 }
 
@@ -53,7 +53,7 @@ func (conf AdapterAttendantConfig) Validate() error {
 }
 
 type DeviceIngestConfig struct {
-	JWTSecret string `json:"jwtSecret" mapstructure:"jwt-secret"`
+	JWTSecret string `json:"jwt-secret" mapstructure:"jwt-secret"`
 }
 
 func (conf DeviceIngestConfig) Validate() error {
@@ -67,7 +67,6 @@ type Config struct {
 	Database         DatabaseConfig         `json:"database" mapstructure:"database"`
 	AdapterAttendant AdapterAttendantConfig `json:"adapter-attendant" mapstructure:"adapter-attendant"`
 	DeviceIngest     DeviceIngestConfig     `json:"device-ingest" mapstructure:"device-ingest"`
-	PurgeDB          bool                   `json:"purge-db"`
 	Event            EventConfig            `json:"event" mapstructure:"event"`
 }
 
@@ -102,8 +101,6 @@ func init() {
 	viper.BindEnv("database.database")
 	viper.SetDefault("database.port", 3306)
 	viper.SetDefault("database.database", "devicestore")
-	viper.BindEnv("purge-db")
-	viper.SetDefault("purge-db", false)
 
 	// # Device attendant
 	viper.BindEnv("adapter-attendant.url")
@@ -118,9 +115,9 @@ func init() {
 	viper.BindEnv("logging.http.url")
 
 	// Event
-	viper.BindEnv("event.deviceUpdates")
-	viper.SetDefault("event.deviceUpdates", "deviceUpdates")
-	viper.BindEnv("event.connectionString")
+	viper.BindEnv("event.device-updates")
+	viper.SetDefault("event.device-updates", "deviceUpdates")
+	viper.BindEnv("event.connectionstring")
 
 	err := viper.Unmarshal(&Loaded)
 	if err != nil {
