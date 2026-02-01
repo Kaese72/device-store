@@ -52,9 +52,21 @@ func (conf AdapterAttendantConfig) Validate() error {
 	return nil
 }
 
+type DeviceIngestConfig struct {
+	JWTSecret string `json:"jwtSecret" mapstructure:"jwt-secret"`
+}
+
+func (conf DeviceIngestConfig) Validate() error {
+	if conf.JWTSecret == "" {
+		return errors.New("must supply device ingest JWT secret")
+	}
+	return nil
+}
+
 type Config struct {
 	Database         DatabaseConfig         `json:"database" mapstructure:"database"`
 	AdapterAttendant AdapterAttendantConfig `json:"adapter-attendant" mapstructure:"adapter-attendant"`
+	DeviceIngest     DeviceIngestConfig     `json:"device-ingest" mapstructure:"device-ingest"`
 	PurgeDB          bool                   `json:"purge-db"`
 	Event            EventConfig            `json:"event" mapstructure:"event"`
 }
@@ -64,6 +76,9 @@ func (conf Config) Validate() error {
 		return err
 	}
 	if err := conf.AdapterAttendant.Validate(); err != nil {
+		return err
+	}
+	if err := conf.DeviceIngest.Validate(); err != nil {
 		return err
 	}
 	if err := conf.Event.Validate(); err != nil {
@@ -93,6 +108,9 @@ func init() {
 	// # Device attendant
 	viper.BindEnv("adapter-attendant.url")
 	viper.SetDefault("adapter-attendant.url", "http://adapter-attendant:8080")
+
+	// # Device ingest auth
+	viper.BindEnv("device-ingest.jwt-secret")
 
 	// # Logging
 	viper.BindEnv("logging.stdout")

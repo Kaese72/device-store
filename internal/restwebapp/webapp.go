@@ -16,11 +16,11 @@ import (
 
 type webApp struct {
 	persistence persistence.RestPersistenceDB
-	attendant   adapterattendant.Attendant
+	attendant   adapterattendant.AdapterTriggerClient
 	events      *events.DeviceSubscriptions
 }
 
-func NewWebApp(persistence persistence.RestPersistenceDB, attendant adapterattendant.Attendant, events *events.DeviceSubscriptions) webApp {
+func NewWebApp(persistence persistence.RestPersistenceDB, attendant adapterattendant.AdapterTriggerClient, events *events.DeviceSubscriptions) webApp {
 	return webApp{
 		persistence: persistence,
 		attendant:   attendant,
@@ -112,7 +112,7 @@ func (app webApp) TriggerDeviceCapability(ctx context.Context, input *struct {
 	if err != nil {
 		return nil, err
 	}
-	adapter, err := app.attendant.GetAdapter(string(capability.BridgeKey), ctx)
+	adapter, err := app.attendant.GetAdapterAddress(ctx, capability.AdapterId)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func (app webApp) TriggerGroupCapability(ctx context.Context, input *struct {
 	if err != nil {
 		return nil, err
 	}
-	adapter, err := app.attendant.GetAdapter(string(capability.BridgeKey), ctx)
+	adapter, err := app.attendant.GetAdapterAddress(ctx, capability.AdapterId)
 	if err != nil {
 		return nil, err
 	}

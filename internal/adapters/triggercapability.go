@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strconv"
 
-	adapterattendantmodels "github.com/Kaese72/adapter-attendant/rest/models"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/restmodels"
 	"github.com/danielgtaylor/huma/v2"
@@ -19,13 +18,13 @@ import (
 
 var tracingClient = apmhttp.WrapClient(http.DefaultClient)
 
-func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, bridgeDeviceIdentifier string, capabilityID string, capArg restmodels.DeviceCapabilityArgs) error {
+func TriggerDeviceCapability(ctx context.Context, adapterAddress string, bridgeDeviceIdentifier string, capabilityID string, capArg restmodels.DeviceCapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)
 	if err != nil {
 		return huma.Error400BadRequest(err.Error())
 	}
 
-	adapterURL, err := url.Parse(adapter.Address)
+	adapterURL, err := url.Parse(adapterAddress)
 	if err != nil {
 		return err
 	}
@@ -49,13 +48,13 @@ func TriggerDeviceCapability(ctx context.Context, adapter adapterattendantmodels
 	return nil
 }
 
-func TriggerGroupCapability(ctx context.Context, adapter adapterattendantmodels.Adapter, groupId string, capabilityId string, capArg restmodels.DeviceCapabilityArgs) error {
+func TriggerGroupCapability(ctx context.Context, adapterAddress string, groupId string, capabilityId string, capArg restmodels.DeviceCapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)
 	if err != nil {
 		return huma.Error400BadRequest(err.Error())
 	}
 
-	adapterURL, err := url.Parse(adapter.Address)
+	adapterURL, err := url.Parse(adapterAddress)
 	if err != nil {
 		return err
 	}

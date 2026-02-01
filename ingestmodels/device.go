@@ -1,10 +1,10 @@
 package ingestmodels
 
 type IngestDevice struct {
-	BridgeIdentifier string                   `json:"bridge-identifier"`
-	BridgeKey        string                   `json:"bridge-key" required:"false"`
+	BridgeIdentifier string                   `json:"bridge-identifier" required:"true"`
 	Attributes       []IngestAttribute        `json:"attributes" required:"false"`
 	Capabilities     []IngestDeviceCapability `json:"capabilities" required:"false"`
-	Triggers         []IngestTrigger          `json:"triggers" required:"false"`
 	GroupIds         []int                    `json:"group-ids" required:"false"`
+	// The AdapterId is set from the JWT token and is not expected from the client
+	AdapterId int `json:"-"`
 }

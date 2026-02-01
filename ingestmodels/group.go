@@ -1,9 +1,9 @@
 package ingestmodels
 
 type IngestGroup struct {
-	Name             string                  `json:"name"`
-	BridgeKey        string                  `json:"bridge-key" required:"false"`
-	BridgeIdentifier string                  `json:"bridge-identifier"`
-	Capabilities     []IngestGroupCapability `json:"capabilities"`
-	DeviceIds        []int                   `json:"device-ids"`
+	Name             string                  `json:"name" required:"true"`
+	AdapterId        int                     `json:"adapter-id" readonly:"true"`
+	BridgeIdentifier string                  `json:"bridge-identifier" required:"true"`
+	Capabilities     []IngestGroupCapability `json:"capabilities" required:"false"`
+	DeviceIds        []int                   `json:"device-ids" required:"false"`
 }

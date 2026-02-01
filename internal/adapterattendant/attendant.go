@@ -7,52 +7,49 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Kaese72/adapter-attendant/rest/models"
 	"github.com/Kaese72/device-store/internal/config"
 	"go.elastic.co/apm/module/apmhttp/v2"
 	"golang.org/x/net/context/ctxhttp"
 )
 
-type Attendant interface {
-	GetAdapter(string, context.Context) (models.Adapter, error)
-}
-
-func NewAdapterAttendant(config config.AdapterAttendantConfig) Attendant {
-	return attendantClient{
+func NewAdapterTrigger(config config.AdapterAttendantConfig) AdapterTriggerClient {
+	return AdapterTriggerClient{
 		URL:   config.URL,
-		cache: map[string]AdapterCache{},
+		cache: map[int]AdapterAddressCache{},
 	}
 }
 
-type AdapterCache struct {
+type AdapterAddressCache struct {
 	LastUpdate time.Time
-	models.Adapter
+	Address    string
 }
 
-type attendantClient struct {
+type AdapterTriggerClient struct {
 	URL   string
-	cache map[string]AdapterCache
+	cache map[int]AdapterAddressCache
 }
 
 var tracingClient = apmhttp.WrapClient(http.DefaultClient)
 
-func (client attendantClient) GetAdapter(adapterName string, ctx context.Context) (models.Adapter, error) {
-	if cached, ok := client.cache[adapterName]; ok && cached.LastUpdate.After(time.Now().Add(-1*time.Hour)) {
-		return cached.Adapter, nil
+func (client AdapterTriggerClient) GetAdapterAddress(ctx context.Context, adapterId int) (string, error) {
+	if cached, ok := client.cache[adapterId]; ok && cached.LastUpdate.After(time.Now().Add(-1*time.Hour)) {
+		return cached.Address, nil
 	}
-	resp, err := ctxhttp.Get(ctx, tracingClient, fmt.Sprintf("%s/adapter-attendant/v0/adapters/%s", client.URL, adapterName))
+	resp, err := ctxhttp.Get(ctx, tracingClient, fmt.Sprintf("%s/adapter-attendant/v1/adapters/%d/address", client.URL, adapterId))
 	if err != nil {
-		return models.Adapter{}, err
+		return "", err
 	}
 	defer resp.Body.Close()
-	adapter := models.Adapter{}
-	err = json.NewDecoder(resp.Body).Decode(&adapter)
+	response := struct {
+		Address string `json:"address"`
+	}{}
+	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
-		return adapter, err
+		return "", err
 	}
-	client.cache[adapterName] = AdapterCache{
+	client.cache[adapterId] = AdapterAddressCache{
 		LastUpdate: time.Now(),
-		Adapter:    adapter,
+		Address:    response.Address,
 	}
-	return adapter, err
+	return response.Address, nil
 }

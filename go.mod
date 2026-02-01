@@ -3,19 +3,18 @@ module github.com/Kaese72/device-store
 go 1.25.0
 
 require (
-	github.com/Kaese72/adapter-attendant v0.0.9
 	github.com/Kaese72/huemie-lib v0.0.4
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gorilla/mux v1.8.1
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/viper v1.16.0
-	go.elastic.co/apm/module/apmgorilla v1.15.0
 	go.elastic.co/apm/module/apmhttp/v2 v2.4.3
 	go.elastic.co/apm/module/apmsql v1.15.0
 	go.elastic.co/apm/v2 v2.4.3
 	golang.org/x/net v0.40.0
 )
 
-require github.com/danielgtaylor/huma/v2 v2.34.1 // indirect
+require github.com/danielgtaylor/huma/v2 v2.34.1
 
 require (
 	github.com/armon/go-radix v1.0.0 // indirect
@@ -40,11 +39,9 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	go.elastic.co/apm v1.15.0 // indirect
-	go.elastic.co/apm/module/apmhttp v1.15.0 // indirect
 	go.elastic.co/fastjson v1.1.0 // indirect
 	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
 	golang.org/x/mod v0.17.0 // indirect
-	golang.org/x/sync v0.14.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect

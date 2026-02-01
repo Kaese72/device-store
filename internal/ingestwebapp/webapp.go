@@ -6,7 +6,6 @@ import (
 	"github.com/Kaese72/device-store/eventmodels"
 	"github.com/Kaese72/device-store/ingestmodels"
 	"github.com/Kaese72/device-store/internal/persistence"
-	"github.com/danielgtaylor/huma/v2"
 )
 
 type webApp struct {
@@ -22,14 +21,10 @@ func NewWebApp(persistence persistence.IngestPersistenceDB, deviceUpdatesChan ch
 }
 
 func (app webApp) PostDevice(ctx context.Context, input *struct {
-	BridgeKey string                    `header:"Bridge-Key" doc:"Bridge key for authentication"`
-	Body      ingestmodels.IngestDevice `body:""`
+	Body ingestmodels.IngestDevice `body:""`
 }) (*struct{}, error) {
-	if input.BridgeKey == "" {
-		return nil, huma.Error400BadRequest("May not update devices when not identifying as a bridge")
-	}
 	device := input.Body
-	device.BridgeKey = input.BridgeKey
+	device.AdapterId = ctx.Value(adapterIDContextKey{}).(int)
 	deviceId, updates, err := app.persistence.PostDevice(ctx, device)
 	if err != nil {
 		return nil, err
@@ -53,14 +48,10 @@ func (app webApp) PostDevice(ctx context.Context, input *struct {
 }
 
 func (app webApp) PostGroup(ctx context.Context, input *struct {
-	BridgeKey string                   `header:"Bridge-Key" doc:"Bridge key for authentication"`
-	Body      ingestmodels.IngestGroup `body:""`
+	Body ingestmodels.IngestGroup `body:""`
 }) (*struct{}, error) {
-	if input.BridgeKey == "" {
-		return nil, huma.Error400BadRequest("May not update groups when not identifying as a bridge")
-	}
 	group := input.Body
-	group.BridgeKey = input.BridgeKey
+	group.AdapterId = ctx.Value(adapterIDContextKey{}).(int)
 	err := app.persistence.PostGroup(ctx, group)
 	if err != nil {
 		return nil, err

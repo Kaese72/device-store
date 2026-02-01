@@ -56,8 +56,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	adapterAttendant := adapterattendant.NewAdapterAttendant(config.Loaded.AdapterAttendant)
-	restWebapp := restwebapp.NewWebApp(dbPersistence, adapterAttendant, deviceUpdates)
+	adapterTrigger := adapterattendant.NewAdapterTrigger(config.Loaded.AdapterAttendant)
+	restWebapp := restwebapp.NewWebApp(dbPersistence, adapterTrigger, deviceUpdates)
 	ingestWebapp := ingestwebapp.NewWebApp(dbPersistence, deviceUpdateChan)
 
 	// Create Huma API
@@ -66,6 +66,13 @@ func main() {
 	humaConfig.OpenAPIPath = "/device-store/openapi"
 	humaConfig.DocsPath = "/device-store/docs"
 	api := humamux.New(router, humaConfig)
+
+	ingestRouter := router.PathPrefix("/device-ingest").Subrouter()
+	ingestRouter.Use(ingestwebapp.DeviceIngestJWTMiddleware(config.Loaded.DeviceIngest.JWTSecret))
+	ingestConfig := huma.DefaultConfig("device-store", "1.0.0")
+	ingestConfig.OpenAPIPath = ""
+	ingestConfig.DocsPath = ""
+	ingestAPI := humamux.New(ingestRouter, ingestConfig)
 
 	// Device Store endpoints
 	huma.Get(api, "/device-store/v0/devices", restWebapp.GetDevices)
@@ -90,8 +97,8 @@ func main() {
 
 	// // Device Ingest endpoints
 	// Uncomment below if ingestWebapp is enabled and Huma-compatible
-	huma.Post(api, "/device-ingest/v0/devices", ingestWebapp.PostDevice)
-	huma.Post(api, "/device-ingest/v0/groups", ingestWebapp.PostGroup)
+	huma.Post(ingestAPI, "/device-ingest/v0/devices", ingestWebapp.PostDevice)
+	huma.Post(ingestAPI, "/device-ingest/v0/groups", ingestWebapp.PostGroup)
 
 	// Start the server
 	if err := http.ListenAndServe(":8080", router); err != nil {
