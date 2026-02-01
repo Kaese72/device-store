@@ -40,6 +40,9 @@ func (client AdapterTriggerClient) GetAdapterAddress(ctx context.Context, adapte
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to get adapter address, status code: %d", resp.StatusCode)
+	}
 	response := struct {
 		Address string `json:"address"`
 	}{}
