@@ -16,6 +16,10 @@ type adapterIDContextKey struct{}
 func DeviceIngestJWTMiddleware(secret string) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasPrefix(r.URL.Path, "/device-ingest/") {
+				next.ServeHTTP(w, r)
+				return
+			}
 			authHeader := r.Header.Get("Authorization")
 			if !strings.HasPrefix(authHeader, "Bearer ") {
 				http.Error(w, "missing bearer token", http.StatusUnauthorized)
