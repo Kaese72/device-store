@@ -102,6 +102,7 @@ var deviceAttributeAuditFilters = map[string]map[string]func(string) (string, []
 
 type GetDevicesCapabilityIntermediate struct {
 	Name          string `json:"name"`
+	Updated       string `json:"updated"`
 	ArgumentSpecs []struct {
 		Name    string `json:"name"`
 		Boolean *struct {
@@ -122,7 +123,8 @@ type GetDevicesCapabilityIntermediate struct {
 
 func (i GetDevicesCapabilityIntermediate) toRest() restmodels.DeviceCapability {
 	return restmodels.DeviceCapability{
-		Name: i.Name,
+		Name:    i.Name,
+		Updated: i.Updated,
 		ArgumentSpecs: func() []restmodels.ArgumentSpec {
 			var specs []restmodels.ArgumentSpec
 			for _, argSpec := range i.ArgumentSpecs {
@@ -160,11 +162,13 @@ type GetDevicesAttributeIntermediate struct {
 	BooleanValue *float32 `json:"boolean"`
 	NumericValue *float32 `json:"numeric"`
 	TextValue    *string  `json:"text"`
+	Updated      string   `json:"updated"`
 }
 
 func (i GetDevicesAttributeIntermediate) toRest() restmodels.Attribute {
 	return restmodels.Attribute{
-		Name: i.Name,
+		Name:    i.Name,
+		Updated: i.Updated,
 		Boolean: func() *bool {
 			if i.BooleanValue == nil {
 				return nil
@@ -187,8 +191,9 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		"id",
 		"bridgeIdentifier",
 		"adapterId",
-		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"boolean\", booleanValue, \"numeric\", numericValue, \"text\", textValue)), JSON_ARRAY()) FROM deviceAttributes WHERE deviceAttributes.deviceId = devices.id) as attributes",
-		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"argument-specs\", argumentJsonSchema)), JSON_ARRAY()) FROM deviceCapabilities WHERE deviceId = devices.id) as capabilities",
+		"updated",
+		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"boolean\", booleanValue, \"numeric\", numericValue, \"text\", textValue, \"updated\", updated)), JSON_ARRAY()) FROM deviceAttributes WHERE deviceAttributes.deviceId = devices.id) as attributes",
+		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"argument-specs\", argumentJsonSchema, \"updated\", updated)), JSON_ARRAY()) FROM deviceCapabilities WHERE deviceId = devices.id) as capabilities",
 		"(SELECT COALESCE(JSON_ARRAYAGG(groupId), JSON_ARRAY()) FROM groupDevices WHERE deviceId = devices.id) as groupIds",
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceTriggers WHERE deviceTriggers.deviceId = devices.id) as triggers",
 	}
@@ -213,7 +218,7 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		var attributesBytes []byte
 		var triggerBytes []byte
 		var groupIdsBytes []byte
-		err = rows.Scan(&device.ID, &device.BridgeIdentifier, &device.AdapterId, &attributesBytes, &capabilitiesBytes, &groupIdsBytes, &triggerBytes)
+		err = rows.Scan(&device.ID, &device.BridgeIdentifier, &device.AdapterId, &device.Updated, &attributesBytes, &capabilitiesBytes, &groupIdsBytes, &triggerBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -377,7 +382,7 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 	var deviceId int
 	var presentAttributes map[string]dbAttribute = make(map[string]dbAttribute)
 	if foundId == 0 {
-		rows := tx.QueryRowContext(ctx, `INSERT INTO devices (bridgeIdentifier, adapterId) VALUES (?, ?) RETURNING id`, device.BridgeIdentifier, device.AdapterId)
+		rows := tx.QueryRowContext(ctx, `INSERT INTO devices (bridgeIdentifier, adapterId, updated) VALUES (?, ?, NOW()) RETURNING id`, device.BridgeIdentifier, device.AdapterId)
 		err := rows.Scan(&deviceId)
 		if err != nil {
 			return 0, nil, err
@@ -404,7 +409,7 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 		// If the attributes is already present and is different, update it record for event updates later
 		if presentAttribute, ok := presentAttributes[attribute.Name]; ok {
 			if !presentAttribute.EqualRest(attribute) {
-				_, err = tx.ExecContext(ctx, `UPDATE deviceAttributes SET booleanValue=?, numericValue=?, textValue=? WHERE deviceId=? AND name=?`, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text, deviceId, attribute.Name)
+				_, err = tx.ExecContext(ctx, `UPDATE deviceAttributes SET booleanValue=?, numericValue=?, textValue=?, updated=NOW() WHERE deviceId=? AND name=?`, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text, deviceId, attribute.Name)
 				if err != nil {
 					return 0, nil, err
 				}
@@ -413,20 +418,28 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 			// If equal, do nothing ...
 		} else {
 			// If the attribute is not present, insert it
-			_, err = tx.ExecContext(ctx, `INSERT INTO deviceAttributes (deviceId, name, booleanValue, numericValue, textValue) VALUES (?, ?, ?, ?, ?)`, deviceId, attribute.Name, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text)
+			_, err = tx.ExecContext(ctx, `INSERT INTO deviceAttributes (deviceId, name, booleanValue, numericValue, textValue, updated) VALUES (?, ?, ?, ?, ?, NOW())`, deviceId, attribute.Name, toDbBoolean(attribute.Boolean), attribute.Numeric, attribute.Text)
 			if err != nil {
 				return 0, nil, err
 			}
 			updatedAttributes = append(updatedAttributes, attribute)
 		}
 	}
+	deviceWasUpdated := len(updatedAttributes) > 0
 	for _, capability := range device.Capabilities {
 		// JSON encode ArgumentsJsonSchema so it can be saved in the database
 		argumentsJsonSchema, err := json.Marshal(capability.ArgumentSpecs)
 		if err != nil {
 			return 0, nil, err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO deviceCapabilities (deviceId, name, argumentJsonSchema) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE argumentJsonSchema = VALUES(argumentJsonSchema)`, deviceId, capability.Name, argumentsJsonSchema)
+		_, err = tx.ExecContext(ctx, `INSERT INTO deviceCapabilities (deviceId, name, argumentJsonSchema, updated) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE argumentJsonSchema = VALUES(argumentJsonSchema), updated = NOW()`, deviceId, capability.Name, argumentsJsonSchema)
+		if err != nil {
+			return 0, nil, err
+		}
+		deviceWasUpdated = true
+	}
+	if deviceWasUpdated {
+		_, err = tx.ExecContext(ctx, `UPDATE devices SET updated = GREATEST(updated, NOW()) WHERE id = ?`, deviceId)
 		if err != nil {
 			return 0, nil, err
 		}
