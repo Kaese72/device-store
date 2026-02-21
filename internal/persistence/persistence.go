@@ -11,6 +11,7 @@ import (
 type RestPersistenceDB interface {
 	// Device Control
 	GetDevices(context.Context, []restmodels.Filter) ([]restmodels.Device, error)
+	DeleteDevice(ctx context.Context, storeIdentifier int) error
 	GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error)
 	// Audits
 	GetAttributeAudits(context.Context, []restmodels.Filter) ([]restmodels.AttributeAudit, error)

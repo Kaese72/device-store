@@ -73,6 +73,16 @@ func (app webApp) GetDevice(ctx context.Context, input *struct {
 	}, err
 }
 
+func (app webApp) DeleteDevice(ctx context.Context, input *struct {
+	StoreDeviceIdentifier int `path:"storeDeviceIdentifier" doc:"the ID of the device to forget"`
+}) (*struct{}, error) {
+	err := app.persistence.DeleteDevice(ctx, input.StoreDeviceIdentifier)
+	if err != nil {
+		return nil, err
+	}
+	return &struct{}{}, nil
+}
+
 func (app webApp) GetAttributeAudits(ctx context.Context, input *struct {
 	Filters string `query:"filters" doc:"a string JSON array of objects containing key, op, and value for filtering"`
 }) (*struct {

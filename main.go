@@ -71,6 +71,7 @@ func main() {
 	// Device Store endpoints
 	huma.Get(api, "/device-store/v0/devices", restWebapp.GetDevices)
 	huma.Get(api, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.GetDevice)
+	huma.Delete(api, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.DeleteDevice)
 	huma.Post(api, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability)
 
 	sse.Register(api, huma.Operation{
