@@ -40,6 +40,7 @@ func (app webApp) PostDevice(ctx context.Context, input *struct {
 				Boolean: update.Boolean,
 				Text:    update.Text,
 				Numeric: update.Numeric,
+				Updated: update.Updated,
 			})
 		}
 		app.deviceUpdatesChan <- deviceUpdateEvent
