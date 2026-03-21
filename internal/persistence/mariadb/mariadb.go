@@ -25,7 +25,7 @@ type mariadbPersistence struct {
 }
 
 func NewMariadbPersistence(conf config.DatabaseConfig) (mariadbPersistence, error) {
-	db, err := apmsql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", conf.User, conf.Password, conf.Host, conf.Port, conf.Database))
+	db, err := apmsql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&loc=UTC", conf.User, conf.Password, conf.Host, conf.Port, conf.Database))
 	if err != nil {
 		logging.Fatal(err.Error(), context.Background())
 		return mariadbPersistence{}, err
@@ -101,8 +101,8 @@ var deviceAttributeAuditFilters = map[string]map[string]func(string) (string, []
 }
 
 type GetDevicesCapabilityIntermediate struct {
-	Name          string `json:"name"`
-	Updated       string `json:"updated"`
+	Name          string    `json:"name"`
+	Updated       time.Time `json:"updated"`
 	ArgumentSpecs []struct {
 		Name    string `json:"name"`
 		Boolean *struct {
@@ -158,11 +158,11 @@ func (i GetDevicesCapabilityIntermediate) toRest() restmodels.DeviceCapability {
 }
 
 type GetDevicesAttributeIntermediate struct {
-	Name         string   `json:"name"`
-	BooleanValue *float32 `json:"boolean"`
-	NumericValue *float32 `json:"numeric"`
-	TextValue    *string  `json:"text"`
-	Updated      string   `json:"updated"`
+	Name         string    `json:"name"`
+	BooleanValue *float32  `json:"boolean"`
+	NumericValue *float32  `json:"numeric"`
+	TextValue    *string   `json:"text"`
+	Updated      time.Time `json:"updated"`
 }
 
 func (i GetDevicesAttributeIntermediate) toRest() restmodels.Attribute {
@@ -192,8 +192,8 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		"bridgeIdentifier",
 		"adapterId",
 		"updated",
-		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"boolean\", booleanValue, \"numeric\", numericValue, \"text\", textValue, \"updated\", updated)), JSON_ARRAY()) FROM deviceAttributes WHERE deviceAttributes.deviceId = devices.id) as attributes",
-		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"argument-specs\", argumentJsonSchema, \"updated\", updated)), JSON_ARRAY()) FROM deviceCapabilities WHERE deviceId = devices.id) as capabilities",
+		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"boolean\", booleanValue, \"numeric\", numericValue, \"text\", textValue, \"updated\", DATE_FORMAT(updated, '%Y-%m-%dT%H:%i:%sZ'))), JSON_ARRAY()) FROM deviceAttributes WHERE deviceAttributes.deviceId = devices.id) as attributes",
+		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"argument-specs\", argumentJsonSchema, \"updated\", DATE_FORMAT(updated, '%Y-%m-%dT%H:%i:%sZ'))), JSON_ARRAY()) FROM deviceCapabilities WHERE deviceId = devices.id) as capabilities",
 		"(SELECT COALESCE(JSON_ARRAYAGG(groupId), JSON_ARRAY()) FROM groupDevices WHERE deviceId = devices.id) as groupIds",
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceTriggers WHERE deviceTriggers.deviceId = devices.id) as triggers",
 	}
@@ -298,13 +298,7 @@ func (persistence mariadbPersistence) GetAttributeAudits(ctx context.Context, fi
 	defer rows.Close()
 	for rows.Next() {
 		var audit restmodels.AttributeAudit
-		var timestampStr string
-		err = rows.Scan(&audit.ID, &audit.DeviceID, &audit.Name, &timestampStr, &audit.OldBooleanValue, &audit.OldNumericValue, &audit.OldTextValue, &audit.NewBooleanValue, &audit.NewNumericValue, &audit.NewTextValue)
-		if err != nil {
-			return nil, err
-		}
-		// Parse timestamp string to time.Time
-		audit.Timestamp, err = time.Parse("2006-01-02 15:04:05", timestampStr)
+		err = rows.Scan(&audit.ID, &audit.DeviceID, &audit.Name, &audit.Timestamp, &audit.OldBooleanValue, &audit.OldNumericValue, &audit.OldTextValue, &audit.NewBooleanValue, &audit.NewNumericValue, &audit.NewTextValue)
 		if err != nil {
 			return nil, err
 		}
@@ -328,6 +322,15 @@ type dbAttribute struct {
 	BooleanValue *float32
 	NumericValue *float32
 	TextValue    *string
+}
+
+func getAttributeUpdated(ctx context.Context, tx queryAble, deviceId int, attributeName string) (time.Time, error) {
+	var updated time.Time
+	row := tx.QueryRowContext(ctx, `SELECT updated FROM deviceAttributes WHERE deviceId = ? AND name = ?`, deviceId, attributeName)
+	if err := row.Scan(&updated); err != nil {
+		return time.Time{}, err
+	}
+	return updated, nil
 }
 
 // Equal checks whether two dbAttributes are equal.
@@ -413,7 +416,13 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 				if err != nil {
 					return 0, nil, err
 				}
-				updatedAttributes = append(updatedAttributes, attribute)
+				updated, err := getAttributeUpdated(ctx, tx, deviceId, attribute.Name)
+				if err != nil {
+					return 0, nil, err
+				}
+				updatedAttribute := attribute
+				updatedAttribute.Updated = updated
+				updatedAttributes = append(updatedAttributes, updatedAttribute)
 			}
 			// If equal, do nothing ...
 		} else {
@@ -422,7 +431,13 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 			if err != nil {
 				return 0, nil, err
 			}
-			updatedAttributes = append(updatedAttributes, attribute)
+			updated, err := getAttributeUpdated(ctx, tx, deviceId, attribute.Name)
+			if err != nil {
+				return 0, nil, err
+			}
+			updatedAttribute := attribute
+			updatedAttribute.Updated = updated
+			updatedAttributes = append(updatedAttributes, updatedAttribute)
 		}
 	}
 	deviceWasUpdated := len(updatedAttributes) > 0
@@ -488,6 +503,7 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, tx queryAble)
 		"bridgeIdentifier",
 		"adapterId",
 		"name",
+		"updated",
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM groupCapabilities WHERE groupId = groups.id) as capabilities",
 		"(SELECT COALESCE(JSON_ARRAYAGG(deviceId), JSON_ARRAY()) FROM groupDevices WHERE groupId = groups.id) as deviceIds",
 	}
@@ -510,7 +526,7 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, tx queryAble)
 		var group restmodels.Group
 		var capabilitiesBytes []byte
 		var deviceIdsBytes []byte
-		err = rows.Scan(&group.ID, &group.BridgeIdentifier, &group.AdapterId, &group.Name, &capabilitiesBytes, &deviceIdsBytes)
+		err = rows.Scan(&group.ID, &group.BridgeIdentifier, &group.AdapterId, &group.Name, &group.Updated, &capabilitiesBytes, &deviceIdsBytes)
 		if err != nil {
 			return nil, err
 		}

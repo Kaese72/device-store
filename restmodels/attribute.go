@@ -1,11 +1,13 @@
 package restmodels
 
+import "time"
+
 type Attribute struct {
 	Name    string   `json:"name"`
 	Boolean *bool    `json:"boolean-state,omitempty"`
 	Numeric *float32 `json:"numeric-state,omitempty"`
 	Text    *string  `json:"string-state,omitempty"`
-	Updated string   `json:"updated"`
+	Updated time.Time `json:"updated"`
 }
 
 // func exclusiveNil(pointer1, pointer2 interface{}) bool {
