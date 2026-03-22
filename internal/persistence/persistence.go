@@ -17,6 +17,7 @@ type RestPersistenceDB interface {
 	GetAttributeAudits(context.Context, []restmodels.Filter) ([]restmodels.AttributeAudit, error)
 	//// Groups
 	GetGroups(context.Context, []restmodels.Filter) ([]restmodels.Group, error)
+	DeleteGroup(ctx context.Context, storeIdentifier int) error
 	GetGroupCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.GroupCapabilityIntermediaryActivation, error)
 }
 

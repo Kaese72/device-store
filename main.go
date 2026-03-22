@@ -88,6 +88,7 @@ func main() {
 
 	huma.Get(api, "/device-store/v0/groups", restWebapp.GetGroups)
 	huma.Get(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.GetGroup)
+	huma.Delete(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.DeleteGroup)
 	huma.Post(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability)
 
 	// Device Ingest endpoints

@@ -252,6 +252,21 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 	return retDevices, rows.Err()
 }
 
+func (persistence mariadbPersistence) DeleteGroup(ctx context.Context, storeIdentifier int) error {
+	result, err := persistence.db.ExecContext(ctx, `DELETE FROM groups WHERE id = ?`, storeIdentifier)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return huma.Error404NotFound(fmt.Sprintf("group %d not found", storeIdentifier))
+	}
+	return nil
+}
+
 func (persistence mariadbPersistence) DeleteDevice(ctx context.Context, storeIdentifier int) error {
 	result, err := persistence.db.ExecContext(ctx, `DELETE FROM devices WHERE id = ?`, storeIdentifier)
 	if err != nil {

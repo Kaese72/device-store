@@ -138,6 +138,16 @@ func (app webApp) TriggerDeviceCapability(ctx context.Context, input *struct {
 	return &struct{}{}, nil
 }
 
+func (app webApp) DeleteGroup(ctx context.Context, input *struct {
+	StoreGroupIdentifier int `path:"storeGroupIdentifier" doc:"the ID of the group to forget"`
+}) (*struct{}, error) {
+	err := app.persistence.DeleteGroup(ctx, input.StoreGroupIdentifier)
+	if err != nil {
+		return nil, err
+	}
+	return &struct{}{}, nil
+}
+
 func (app webApp) TriggerGroupCapability(ctx context.Context, input *struct {
 	StoreGroupIdentifier int                              `path:"storeGroupIdentifier" doc:"the ID of the group to trigger capability for"`
 	CapabilityID         string                           `path:"capabilityID" doc:"the capability to trigger"`
