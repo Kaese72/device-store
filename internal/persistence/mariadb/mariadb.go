@@ -504,7 +504,7 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, tx queryAble)
 		"adapterId",
 		"name",
 		"updated",
-		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM groupCapabilities WHERE groupId = groups.id) as capabilities",
+		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"updated\", DATE_FORMAT(updated, '%Y-%m-%dT%H:%i:%sZ'))), JSON_ARRAY()) FROM groupCapabilities WHERE groupId = groups.id) as capabilities",
 		"(SELECT COALESCE(JSON_ARRAYAGG(deviceId), JSON_ARRAY()) FROM groupDevices WHERE groupId = groups.id) as deviceIds",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM groups`
