@@ -519,7 +519,7 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, tx queryAble)
 		"adapterId",
 		"name",
 		"updated",
-		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"updated\", DATE_FORMAT(updated, '%Y-%m-%dT%H:%i:%sZ'))), JSON_ARRAY()) FROM groupCapabilities WHERE groupId = groups.id) as capabilities",
+		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name, \"argument-specs\", argumentJsonSchema, \"updated\", DATE_FORMAT(updated, '%Y-%m-%dT%H:%i:%sZ'))), JSON_ARRAY()) FROM groupCapabilities WHERE groupId = groups.id) as capabilities",
 		"(SELECT COALESCE(JSON_ARRAYAGG(deviceId), JSON_ARRAY()) FROM groupDevices WHERE groupId = groups.id) as deviceIds",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM groups`
@@ -608,7 +608,11 @@ func postGroupTx(ctx context.Context, group ingestmodels.IngestGroup, tx queryAb
 	}
 	// Update capabilities
 	for _, capability := range group.Capabilities {
-		_, err = tx.ExecContext(ctx, `INSERT IGNORE INTO groupCapabilities (groupId, name) VALUES (?, ?)`, groupId, capability.Name)
+		argumentsJsonSchema, err := json.Marshal(capability.ArgumentSpecs)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO groupCapabilities (groupId, name, argumentJsonSchema, updated) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE argumentJsonSchema = VALUES(argumentJsonSchema), updated = NOW()`, groupId, capability.Name, argumentsJsonSchema)
 		if err != nil {
 			return err
 		}
