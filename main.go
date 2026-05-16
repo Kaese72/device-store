@@ -7,6 +7,7 @@ import (
 
 	"github.com/Kaese72/device-store/eventmodels"
 	"github.com/Kaese72/device-store/internal/adapterattendant"
+	"github.com/Kaese72/huemie-lib/middleware"
 	"github.com/Kaese72/device-store/internal/config"
 	"github.com/Kaese72/device-store/internal/events"
 	"github.com/Kaese72/device-store/internal/ingestwebapp"
@@ -60,8 +61,16 @@ func main() {
 	restWebapp := restwebapp.NewWebApp(dbPersistence, adapterTrigger, deviceUpdates)
 	ingestWebapp := ingestwebapp.NewWebApp(dbPersistence, deviceUpdateChan)
 
+	pubKey, err := middleware.LoadPublicKeyFromFile(config.Loaded.Auth.RSAPublicKeyPath)
+	if err != nil {
+		logging.Error(err.Error(), context.Background())
+		os.Exit(1)
+	}
+
 	// Create Huma API
 	router := mux.NewRouter()
+	// Ingest API uses its own HS256 JWT; skip it here.
+	router.Use(middleware.UseTokenMiddleware(pubKey, "/device-ingest/", "/device-store/openapi", "/device-store/docs"))
 	router.Use(ingestwebapp.DeviceIngestJWTMiddleware(config.Loaded.DeviceIngest.JWTSecret))
 	humaConfig := huma.DefaultConfig("device-store", "1.0.0")
 	humaConfig.OpenAPIPath = "/device-store/openapi"

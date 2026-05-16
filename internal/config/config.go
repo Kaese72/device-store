@@ -63,10 +63,22 @@ func (conf DeviceIngestConfig) Validate() error {
 	return nil
 }
 
+type AuthConfig struct {
+	RSAPublicKeyPath string `json:"rsa-public-key-path" mapstructure:"rsa-public-key-path"`
+}
+
+func (conf AuthConfig) Validate() error {
+	if conf.RSAPublicKeyPath == "" {
+		return errors.New("must supply auth RSA public key path")
+	}
+	return nil
+}
+
 type Config struct {
 	Database         DatabaseConfig         `json:"database" mapstructure:"database"`
 	AdapterAttendant AdapterAttendantConfig `json:"adapter-attendant" mapstructure:"adapter-attendant"`
 	DeviceIngest     DeviceIngestConfig     `json:"device-ingest" mapstructure:"device-ingest"`
+	Auth             AuthConfig             `json:"auth" mapstructure:"auth"`
 	Event            EventConfig            `json:"event" mapstructure:"event"`
 }
 
@@ -78,6 +90,9 @@ func (conf Config) Validate() error {
 		return err
 	}
 	if err := conf.DeviceIngest.Validate(); err != nil {
+		return err
+	}
+	if err := conf.Auth.Validate(); err != nil {
 		return err
 	}
 	if err := conf.Event.Validate(); err != nil {
@@ -108,6 +123,9 @@ func init() {
 
 	// # Device ingest auth
 	viper.BindEnv("device-ingest.jwt-secret")
+
+	// # Authentication service public key (RS256 use-token verification)
+	viper.BindEnv("auth.rsa-public-key-path")
 
 	// # Logging
 	viper.BindEnv("logging.stdout")
