@@ -70,7 +70,7 @@ func main() {
 	// Create Huma API
 	router := mux.NewRouter()
 	// Ingest API uses its own HS256 JWT; skip it here.
-	router.Use(middleware.UseTokenMiddleware(pubKey, "/device-ingest/", "/device-store/openapi", "/device-store/docs"))
+	router.Use(middleware.UseTokenMiddleware(pubKey, "/device-ingest/", "/device-store/openapi", "/device-store/docs", "/device-store-internal/"))
 	router.Use(ingestwebapp.DeviceIngestJWTMiddleware(config.Loaded.DeviceIngest.JWTSecret))
 	humaConfig := huma.DefaultConfig("device-store", "1.0.0")
 	humaConfig.OpenAPIPath = "/device-store/openapi"
@@ -99,6 +99,11 @@ func main() {
 	huma.Get(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.GetGroup)
 	huma.Delete(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.DeleteGroup)
 	huma.Post(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability)
+
+	// Internal endpoints (no auth) — cluster-internal use only, must not be exposed via ingress
+	huma.Get(api, "/device-store-internal/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.GetDevice)
+	huma.Post(api, "/device-store-internal/v0/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability)
+	huma.Post(api, "/device-store-internal/v0/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability)
 
 	// Device Ingest endpoints
 	// Authentication is handled in the middleware where the path is checked.

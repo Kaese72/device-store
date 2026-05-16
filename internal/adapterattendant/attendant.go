@@ -35,7 +35,7 @@ func (client AdapterTriggerClient) GetAdapterAddress(ctx context.Context, adapte
 	if cached, ok := client.cache[adapterId]; ok && cached.LastUpdate.After(time.Now().Add(-1*time.Hour)) {
 		return cached.Address, nil
 	}
-	resp, err := ctxhttp.Get(ctx, tracingClient, fmt.Sprintf("%s/adapter-attendant/v1/adapters/%d/address", client.URL, adapterId))
+	resp, err := ctxhttp.Get(ctx, tracingClient, fmt.Sprintf("%s/adapter-attendant-internal/v1/adapters/%d/address", client.URL, adapterId))
 	if err != nil {
 		return "", err
 	}
