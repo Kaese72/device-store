@@ -2,18 +2,19 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 
 	"github.com/Kaese72/device-store/eventmodels"
 	"github.com/Kaese72/device-store/internal/adapterattendant"
-	"github.com/Kaese72/huemie-lib/middleware"
 	"github.com/Kaese72/device-store/internal/config"
 	"github.com/Kaese72/device-store/internal/events"
 	"github.com/Kaese72/device-store/internal/ingestwebapp"
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence/mariadb"
 	"github.com/Kaese72/device-store/internal/restwebapp"
+	"github.com/Kaese72/huemie-lib/middleware"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humamux"
 	"github.com/danielgtaylor/huma/v2/sse"
@@ -67,51 +68,55 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create Huma API
-	router := mux.NewRouter()
-	// Ingest API uses its own HS256 JWT; skip it here.
-	router.Use(middleware.UseTokenMiddleware(pubKey, "/device-ingest/", "/device-store/openapi", "/device-store/docs", "/device-store-internal/"))
-	router.Use(ingestwebapp.DeviceIngestJWTMiddleware(config.Loaded.DeviceIngest.JWTSecret))
-	humaConfig := huma.DefaultConfig("device-store", "1.0.0")
-	humaConfig.OpenAPIPath = "/device-store/openapi"
-	humaConfig.DocsPath = "/device-store/docs"
-	api := humamux.New(router, humaConfig)
+	// Public router (device-store + device-ingest)
+	publicRouter := mux.NewRouter()
+	publicRouter.Use(middleware.UseTokenMiddleware(pubKey, "/device-ingest/", "/device-store/openapi", "/device-store/docs"))
+	publicRouter.Use(ingestwebapp.DeviceIngestJWTMiddleware(config.Loaded.DeviceIngest.JWTSecret))
+	publicHumaConfig := huma.DefaultConfig("device-store", "1.0.0")
+	publicHumaConfig.OpenAPIPath = "/device-store/openapi"
+	publicHumaConfig.DocsPath = "/device-store/docs"
+	publicAPI := humamux.New(publicRouter, publicHumaConfig)
 
-	// Device Store endpoints
-	huma.Get(api, "/device-store/v0/devices", restWebapp.GetDevices)
-	huma.Get(api, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.GetDevice)
-	huma.Delete(api, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.DeleteDevice)
-	huma.Post(api, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability)
+	huma.Get(publicAPI, "/device-store/v0/devices", restWebapp.GetDevices)
+	huma.Get(publicAPI, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.GetDevice)
+	huma.Delete(publicAPI, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.DeleteDevice)
+	huma.Post(publicAPI, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability)
 
-	sse.Register(api, huma.Operation{
+	sse.Register(publicAPI, huma.Operation{
 		OperationID: "device_updates",
 		Method:      http.MethodGet,
 		Path:        "/device-store/v0/devices/events",
 		Summary:     "Server sent events for devices",
 	}, map[string]any{
-		// Mapping of event type name to Go struct for that event.
 		"update": eventmodels.DeviceAttributeUpdate{},
 	}, restWebapp.StreamDeviceUpdates)
 
-	huma.Get(api, "/device-store/v0/audits/attributes", restWebapp.GetAttributeAudits)
+	huma.Get(publicAPI, "/device-store/v0/audits/attributes", restWebapp.GetAttributeAudits)
 
-	huma.Get(api, "/device-store/v0/groups", restWebapp.GetGroups)
-	huma.Get(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.GetGroup)
-	huma.Delete(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.DeleteGroup)
-	huma.Post(api, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability)
+	huma.Get(publicAPI, "/device-store/v0/groups", restWebapp.GetGroups)
+	huma.Get(publicAPI, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.GetGroup)
+	huma.Delete(publicAPI, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.DeleteGroup)
+	huma.Post(publicAPI, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability)
 
-	// Internal endpoints (no auth) — cluster-internal use only, must not be exposed via ingress
-	huma.Get(api, "/device-store-internal/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.GetDevice)
-	huma.Post(api, "/device-store-internal/v0/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability)
-	huma.Post(api, "/device-store-internal/v0/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability)
+	huma.Post(publicAPI, "/device-ingest/v0/devices", ingestWebapp.PostDevice)
+	huma.Post(publicAPI, "/device-ingest/v0/groups", ingestWebapp.PostGroup)
 
-	// Device Ingest endpoints
-	// Authentication is handled in the middleware where the path is checked.
-	huma.Post(api, "/device-ingest/v0/devices", ingestWebapp.PostDevice)
-	huma.Post(api, "/device-ingest/v0/groups", ingestWebapp.PostGroup)
+	// Internal router (device-store-internal) — no auth, restrict via NetworkPolicy
+	internalRouter := mux.NewRouter()
+	internalAPI := humamux.New(internalRouter, huma.DefaultConfig("device-store-internal", "1.0.0"))
 
-	// Start the server
-	if err := http.ListenAndServe(":8080", router); err != nil {
+	huma.Get(internalAPI, "/device-store-internal/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.GetDevice)
+	huma.Post(internalAPI, "/device-store-internal/v0/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability)
+	huma.Post(internalAPI, "/device-store-internal/v0/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability)
+
+	go func() {
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", config.Loaded.InternalPort), internalRouter); err != nil {
+			logging.Error(err.Error(), context.TODO())
+			os.Exit(1)
+		}
+	}()
+
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", config.Loaded.PublicPort), publicRouter); err != nil {
 		logging.Error(err.Error(), context.TODO())
 	}
 }

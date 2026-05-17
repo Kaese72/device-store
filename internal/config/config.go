@@ -80,6 +80,8 @@ type Config struct {
 	DeviceIngest     DeviceIngestConfig     `json:"device-ingest" mapstructure:"device-ingest"`
 	Auth             AuthConfig             `json:"auth" mapstructure:"auth"`
 	Event            EventConfig            `json:"event" mapstructure:"event"`
+	PublicPort       int                    `json:"public-port" mapstructure:"public-port"`
+	InternalPort     int                    `json:"internal-port" mapstructure:"internal-port"`
 }
 
 func (conf Config) Validate() error {
@@ -131,6 +133,12 @@ func init() {
 	viper.BindEnv("logging.stdout")
 	viper.SetDefault("logging.stdout", true)
 	viper.BindEnv("logging.http.url")
+
+	// # Ports
+	viper.BindEnv("public-port")
+	viper.SetDefault("public-port", 8080)
+	viper.BindEnv("internal-port")
+	viper.SetDefault("internal-port", 8081)
 
 	// Event
 	viper.BindEnv("event.device-updates")
