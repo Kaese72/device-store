@@ -121,7 +121,7 @@ func init() {
 
 	// # Device attendant
 	viper.BindEnv("adapter-attendant.url")
-	viper.SetDefault("adapter-attendant.url", "http://adapter-attendant:8080")
+	viper.SetDefault("adapter-attendant.url", "http://adapter-attendant-internal:8081")
 
 	// # Device ingest auth
 	viper.BindEnv("device-ingest.jwt-secret")
