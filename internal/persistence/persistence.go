@@ -21,6 +21,8 @@ type RestPersistenceDB interface {
 	GetGroups(context.Context, []restmodels.Filter) ([]restmodels.Group, error)
 	DeleteGroup(ctx context.Context, storeIdentifier int) error
 	GetGroupCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.GroupCapabilityIntermediaryActivation, error)
+	WriteGroupCapabilityTriggerAudit(ctx context.Context, groupId int, capabilityName string, success bool, errorMessage *string, arguments string) error
+	GetGroupCapabilityTriggerAudits(ctx context.Context, groupId int) ([]restmodels.GroupCapabilityTriggerAudit, error)
 }
 
 type IngestPersistenceDB interface {

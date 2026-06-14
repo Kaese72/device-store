@@ -186,12 +186,31 @@ func (app webApp) TriggerGroupCapability(ctx context.Context, input *struct {
 	if input.Body != nil {
 		capArgs = *input.Body
 	}
+	argsJSON, _ := json.Marshal(capArgs)
 	sysErr := adapters.TriggerGroupCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, capArgs)
 	if sysErr != nil {
+		errMsg := sysErr.Error()
+		_ = app.persistence.WriteGroupCapabilityTriggerAudit(ctx, input.StoreGroupIdentifier, input.CapabilityID, false, &errMsg, string(argsJSON))
 		return nil, sysErr
 	}
+	_ = app.persistence.WriteGroupCapabilityTriggerAudit(ctx, input.StoreGroupIdentifier, input.CapabilityID, true, nil, string(argsJSON))
 	logging.Info("Capability seemingly successfully triggered", ctx)
 	return &struct{}{}, nil
+}
+
+func (app webApp) GetGroupCapabilityTriggerAudits(ctx context.Context, input *struct {
+	StoreGroupIdentifier int `path:"storeGroupIdentifier" doc:"the ID of the group"`
+}) (*struct {
+	Body []restmodels.GroupCapabilityTriggerAudit
+}, error) {
+	audits, err := app.persistence.GetGroupCapabilityTriggerAudits(ctx, input.StoreGroupIdentifier)
+	if err != nil {
+		return nil, err
+	}
+	if audits == nil {
+		audits = []restmodels.GroupCapabilityTriggerAudit{}
+	}
+	return &struct{ Body []restmodels.GroupCapabilityTriggerAudit }{Body: audits}, nil
 }
 
 func (app webApp) GetGroups(ctx context.Context, input *struct {

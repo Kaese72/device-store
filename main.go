@@ -98,6 +98,7 @@ func main() {
 	huma.Get(publicAPI, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.GetGroup)
 	huma.Delete(publicAPI, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.DeleteGroup)
 	huma.Post(publicAPI, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability)
+	huma.Get(publicAPI, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}/capability-trigger-audits", restWebapp.GetGroupCapabilityTriggerAudits)
 
 	huma.Post(publicAPI, "/device-ingest/v0/devices", ingestWebapp.PostDevice)
 	huma.Post(publicAPI, "/device-ingest/v0/groups", ingestWebapp.PostGroup)
