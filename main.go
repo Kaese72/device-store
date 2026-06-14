@@ -92,6 +92,7 @@ func main() {
 	}, restWebapp.StreamDeviceUpdates)
 
 	huma.Get(publicAPI, "/device-store/v0/audits/attributes", restWebapp.GetAttributeAudits)
+	huma.Get(publicAPI, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}/capability-trigger-audits", restWebapp.GetDeviceCapabilityTriggerAudits)
 
 	huma.Get(publicAPI, "/device-store/v0/groups", restWebapp.GetGroups)
 	huma.Get(publicAPI, "/device-store/v0/groups/{storeGroupIdentifier:[0-9]+}", restWebapp.GetGroup)

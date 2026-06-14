@@ -640,6 +640,34 @@ func postGroupTx(ctx context.Context, group ingestmodels.IngestGroup, tx queryAb
 	return nil
 }
 
+func (persistence mariadbPersistence) WriteCapabilityTriggerAudit(ctx context.Context, deviceId int, capabilityName string, success bool, errorMessage *string, arguments string) error {
+	_, err := persistence.db.ExecContext(ctx,
+		`INSERT INTO deviceCapabilityTriggerAudit (deviceId, name, success, errorMessage, arguments) VALUES (?, ?, ?, ?, ?)`,
+		deviceId, capabilityName, success, errorMessage, arguments,
+	)
+	return err
+}
+
+func (persistence mariadbPersistence) GetCapabilityTriggerAudits(ctx context.Context, deviceId int) ([]restmodels.CapabilityTriggerAudit, error) {
+	rows, err := persistence.db.QueryContext(ctx,
+		`SELECT id, deviceId, name, success, errorMessage, timestamp, arguments FROM deviceCapabilityTriggerAudit WHERE deviceId = ? ORDER BY timestamp DESC LIMIT 50`,
+		deviceId,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var audits []restmodels.CapabilityTriggerAudit
+	for rows.Next() {
+		var audit restmodels.CapabilityTriggerAudit
+		if err := rows.Scan(&audit.ID, &audit.DeviceID, &audit.Name, &audit.Success, &audit.ErrorMessage, &audit.Timestamp, &audit.Arguments); err != nil {
+			return nil, err
+		}
+		audits = append(audits, audit)
+	}
+	return audits, rows.Err()
+}
+
 func (persistence mariadbPersistence) GetGroupCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.GroupCapabilityIntermediaryActivation, error) {
 	capability := intermediaries.GroupCapabilityIntermediaryActivation{}
 	row := persistence.db.QueryRowContext(ctx, `SELECT bridgeIdentifier, groupCapabilities.name, adapterId FROM groupCapabilities INNER JOIN groups on groupCapabilities.groupId = groups.id WHERE groupId = ? AND groupCapabilities.name = ?`, storeIdentifier, capabilityName)

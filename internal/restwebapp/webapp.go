@@ -2,6 +2,7 @@ package restwebapp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/Kaese72/device-store/internal/adapterattendant"
@@ -130,12 +131,31 @@ func (app webApp) TriggerDeviceCapability(ctx context.Context, input *struct {
 	if input.Body != nil {
 		capArg = *input.Body
 	}
+	argsJSON, _ := json.Marshal(capArg)
 	sysErr := adapters.TriggerDeviceCapability(ctx, adapter, capability.BridgeIdentifier, capability.Name, capArg)
 	if sysErr != nil {
+		errMsg := sysErr.Error()
+		_ = app.persistence.WriteCapabilityTriggerAudit(ctx, input.StoreDeviceIdentifier, input.CapabilityID, false, &errMsg, string(argsJSON))
 		return nil, sysErr
 	}
+	_ = app.persistence.WriteCapabilityTriggerAudit(ctx, input.StoreDeviceIdentifier, input.CapabilityID, true, nil, string(argsJSON))
 	logging.Info("Capability seemingly successfully triggered", ctx)
 	return &struct{}{}, nil
+}
+
+func (app webApp) GetDeviceCapabilityTriggerAudits(ctx context.Context, input *struct {
+	StoreDeviceIdentifier int `path:"storeDeviceIdentifier" doc:"the ID of the device"`
+}) (*struct {
+	Body []restmodels.CapabilityTriggerAudit
+}, error) {
+	audits, err := app.persistence.GetCapabilityTriggerAudits(ctx, input.StoreDeviceIdentifier)
+	if err != nil {
+		return nil, err
+	}
+	if audits == nil {
+		audits = []restmodels.CapabilityTriggerAudit{}
+	}
+	return &struct{ Body []restmodels.CapabilityTriggerAudit }{Body: audits}, nil
 }
 
 func (app webApp) DeleteGroup(ctx context.Context, input *struct {

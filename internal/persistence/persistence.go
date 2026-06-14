@@ -15,6 +15,8 @@ type RestPersistenceDB interface {
 	GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error)
 	// Audits
 	GetAttributeAudits(context.Context, []restmodels.Filter) ([]restmodels.AttributeAudit, error)
+	WriteCapabilityTriggerAudit(ctx context.Context, deviceId int, capabilityName string, success bool, errorMessage *string, arguments string) error
+	GetCapabilityTriggerAudits(ctx context.Context, deviceId int) ([]restmodels.CapabilityTriggerAudit, error)
 	//// Groups
 	GetGroups(context.Context, []restmodels.Filter) ([]restmodels.Group, error)
 	DeleteGroup(ctx context.Context, storeIdentifier int) error
