@@ -186,7 +186,36 @@ type queryAble interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
-func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []restmodels.Filter) ([]restmodels.Device, error) {
+// paginationClause returns the SQL "LIMIT ? OFFSET ?" fragment and its arguments
+// for the given pagination. A zero Limit means unbounded, in which case no
+// clause is applied.
+func paginationClause(pagination restmodels.Pagination) (string, []any) {
+	if pagination.Limit <= 0 {
+		return "", nil
+	}
+	offset := pagination.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	return " LIMIT ? OFFSET ?", []any{pagination.Limit, offset}
+}
+
+// countRows executes "SELECT COUNT(*) FROM <table> [WHERE <whereClause>]" and
+// returns the total number of matching rows, ignoring pagination.
+func countRows(ctx context.Context, tx queryAble, table string, whereClause string, variables []any) (int, error) {
+	query := `SELECT COUNT(*) FROM ` + table
+	if whereClause != "" {
+		query += " WHERE " + whereClause
+	}
+	var total int
+	row := tx.QueryRowContext(ctx, query, variables...)
+	if err := row.Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Device, int, error) {
 	fields := []string{
 		"id",
 		"bridgeIdentifier",
@@ -200,16 +229,23 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM devices`
 	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, deviceFilters)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	if len(queryFragments) > 0 {
-		query += " WHERE "
-		query += strings.Join(queryFragments, " AND ")
+	whereClause := strings.Join(queryFragments, " AND ")
+	if whereClause != "" {
+		query += " WHERE " + whereClause
 	}
-	var retDevices []restmodels.Device
-	rows, err := persistence.db.Query(query, variables...)
+	total, err := countRows(ctx, persistence.db, "devices", whereClause, variables)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	query += " ORDER BY id ASC"
+	limitClause, limitArgs := paginationClause(pagination)
+	query += limitClause
+	var retDevices []restmodels.Device
+	rows, err := persistence.db.Query(query, append(append([]any{}, variables...), limitArgs...)...)
+	if err != nil {
+		return nil, 0, err
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -220,13 +256,13 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		var groupIdsBytes []byte
 		err = rows.Scan(&device.ID, &device.BridgeIdentifier, &device.AdapterId, &device.Updated, &attributesBytes, &capabilitiesBytes, &groupIdsBytes, &triggerBytes)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		// Attributes
 		var attributeIntermediates []GetDevicesAttributeIntermediate
 		err = json.Unmarshal(attributesBytes, &attributeIntermediates)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		for _, attribute := range attributeIntermediates {
 			device.Attributes = append(device.Attributes, attribute.toRest())
@@ -235,7 +271,7 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		var capabilityIntermediates []GetDevicesCapabilityIntermediate
 		err = json.Unmarshal(capabilitiesBytes, &capabilityIntermediates)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		device.Capabilities = []restmodels.DeviceCapability{}
 		for _, capability := range capabilityIntermediates {
@@ -244,12 +280,12 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		// Group IDs
 		err = json.Unmarshal(groupIdsBytes, &device.GroupIds)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		// Append device to result list
 		retDevices = append(retDevices, device)
 	}
-	return retDevices, rows.Err()
+	return retDevices, total, rows.Err()
 }
 
 func (persistence mariadbPersistence) DeleteGroup(ctx context.Context, storeIdentifier int) error {
@@ -283,7 +319,7 @@ func (persistence mariadbPersistence) DeleteDevice(ctx context.Context, storeIde
 }
 
 // GetAttributeAudits
-func (persistence mariadbPersistence) GetAttributeAudits(ctx context.Context, filters []restmodels.Filter) ([]restmodels.AttributeAudit, error) {
+func (persistence mariadbPersistence) GetAttributeAudits(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.AttributeAudit, int, error) {
 	fields := []string{
 		"id",
 		"deviceId",
@@ -299,27 +335,34 @@ func (persistence mariadbPersistence) GetAttributeAudits(ctx context.Context, fi
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM deviceAttributeAudit`
 	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, deviceAttributeAuditFilters)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	if len(queryFragments) > 0 {
-		query += " WHERE "
-		query += strings.Join(queryFragments, " AND ")
+	whereClause := strings.Join(queryFragments, " AND ")
+	if whereClause != "" {
+		query += " WHERE " + whereClause
 	}
-	retAudits := []restmodels.AttributeAudit{}
-	rows, err := persistence.db.Query(query, variables...)
+	total, err := countRows(ctx, persistence.db, "deviceAttributeAudit", whereClause, variables)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	query += " ORDER BY id ASC"
+	limitClause, limitArgs := paginationClause(pagination)
+	query += limitClause
+	retAudits := []restmodels.AttributeAudit{}
+	rows, err := persistence.db.Query(query, append(append([]any{}, variables...), limitArgs...)...)
+	if err != nil {
+		return nil, 0, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var audit restmodels.AttributeAudit
 		err = rows.Scan(&audit.ID, &audit.DeviceID, &audit.Name, &audit.Timestamp, &audit.OldBooleanValue, &audit.OldNumericValue, &audit.OldTextValue, &audit.NewBooleanValue, &audit.NewNumericValue, &audit.NewTextValue)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		retAudits = append(retAudits, audit)
 	}
-	return retAudits, rows.Err()
+	return retAudits, total, rows.Err()
 }
 
 func toDbBoolean(value *bool) *float32 {
@@ -508,11 +551,11 @@ var groupFilters = map[string]map[string]func(string) (string, []string, error){
 	},
 }
 
-func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []restmodels.Filter) ([]restmodels.Group, error) {
-	return getGroupsTx(ctx, filters, persistence.db)
+func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Group, int, error) {
+	return getGroupsTx(ctx, filters, pagination, persistence.db)
 }
 
-func getGroupsTx(ctx context.Context, filters []restmodels.Filter, tx queryAble) ([]restmodels.Group, error) {
+func getGroupsTx(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination, tx queryAble) ([]restmodels.Group, int, error) {
 	fields := []string{
 		"id",
 		"bridgeIdentifier",
@@ -525,16 +568,23 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, tx queryAble)
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM groups`
 	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, groupFilters)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	if len(queryFragments) > 0 {
-		query += " WHERE "
-		query += strings.Join(queryFragments, " AND ")
+	whereClause := strings.Join(queryFragments, " AND ")
+	if whereClause != "" {
+		query += " WHERE " + whereClause
 	}
-	var groups []restmodels.Group
-	rows, err := tx.QueryContext(ctx, query, variables...)
+	total, err := countRows(ctx, tx, "groups", whereClause, variables)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	query += " ORDER BY id ASC"
+	limitClause, limitArgs := paginationClause(pagination)
+	query += limitClause
+	var groups []restmodels.Group
+	rows, err := tx.QueryContext(ctx, query, append(append([]any{}, variables...), limitArgs...)...)
+	if err != nil {
+		return nil, 0, err
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -543,19 +593,19 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, tx queryAble)
 		var deviceIdsBytes []byte
 		err = rows.Scan(&group.ID, &group.BridgeIdentifier, &group.AdapterId, &group.Name, &group.Updated, &capabilitiesBytes, &deviceIdsBytes)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		err = json.Unmarshal(capabilitiesBytes, &group.Capabilities)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		err = json.Unmarshal(deviceIdsBytes, &group.DeviceIds)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		groups = append(groups, group)
 	}
-	return groups, rows.Err()
+	return groups, total, rows.Err()
 }
 
 func (persistence mariadbPersistence) PostGroup(ctx context.Context, group ingestmodels.IngestGroup) error {
@@ -572,7 +622,7 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inges
 }
 
 func postGroupTx(ctx context.Context, group ingestmodels.IngestGroup, tx queryAble) error {
-	foundGroups, err := getGroupsTx(ctx, []restmodels.Filter{
+	foundGroups, _, err := getGroupsTx(ctx, []restmodels.Filter{
 		{
 			Key:      "bridge-identifier",
 			Operator: "eq",
@@ -583,7 +633,7 @@ func postGroupTx(ctx context.Context, group ingestmodels.IngestGroup, tx queryAb
 			Operator: "eq",
 			Value:    fmt.Sprintf("%d", group.AdapterId),
 		},
-	}, tx)
+	}, restmodels.Pagination{}, tx)
 	if err != nil {
 		return err
 	}
@@ -648,24 +698,32 @@ func (persistence mariadbPersistence) WriteCapabilityTriggerAudit(ctx context.Co
 	return err
 }
 
-func (persistence mariadbPersistence) GetCapabilityTriggerAudits(ctx context.Context, deviceId int) ([]restmodels.CapabilityTriggerAudit, error) {
+func (persistence mariadbPersistence) GetCapabilityTriggerAudits(ctx context.Context, deviceId int, pagination restmodels.Pagination) ([]restmodels.CapabilityTriggerAudit, int, error) {
+	if pagination.Limit <= 0 {
+		pagination.Limit = 50
+	}
+	total, err := countRows(ctx, persistence.db, "deviceCapabilityTriggerAudit", "deviceId = ?", []any{deviceId})
+	if err != nil {
+		return nil, 0, err
+	}
+	limitClause, limitArgs := paginationClause(pagination)
 	rows, err := persistence.db.QueryContext(ctx,
-		`SELECT id, deviceId, name, success, errorMessage, timestamp, arguments FROM deviceCapabilityTriggerAudit WHERE deviceId = ? ORDER BY timestamp DESC LIMIT 50`,
-		deviceId,
+		`SELECT id, deviceId, name, success, errorMessage, timestamp, arguments FROM deviceCapabilityTriggerAudit WHERE deviceId = ? ORDER BY timestamp DESC`+limitClause,
+		append([]any{deviceId}, limitArgs...)...,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	var audits []restmodels.CapabilityTriggerAudit
 	for rows.Next() {
 		var audit restmodels.CapabilityTriggerAudit
 		if err := rows.Scan(&audit.ID, &audit.DeviceID, &audit.Name, &audit.Success, &audit.ErrorMessage, &audit.Timestamp, &audit.Arguments); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		audits = append(audits, audit)
 	}
-	return audits, rows.Err()
+	return audits, total, rows.Err()
 }
 
 func (persistence mariadbPersistence) WriteGroupCapabilityTriggerAudit(ctx context.Context, groupId int, capabilityName string, success bool, errorMessage *string, arguments string) error {
@@ -676,24 +734,32 @@ func (persistence mariadbPersistence) WriteGroupCapabilityTriggerAudit(ctx conte
 	return err
 }
 
-func (persistence mariadbPersistence) GetGroupCapabilityTriggerAudits(ctx context.Context, groupId int) ([]restmodels.GroupCapabilityTriggerAudit, error) {
+func (persistence mariadbPersistence) GetGroupCapabilityTriggerAudits(ctx context.Context, groupId int, pagination restmodels.Pagination) ([]restmodels.GroupCapabilityTriggerAudit, int, error) {
+	if pagination.Limit <= 0 {
+		pagination.Limit = 50
+	}
+	total, err := countRows(ctx, persistence.db, "groupCapabilityTriggerAudit", "groupId = ?", []any{groupId})
+	if err != nil {
+		return nil, 0, err
+	}
+	limitClause, limitArgs := paginationClause(pagination)
 	rows, err := persistence.db.QueryContext(ctx,
-		`SELECT id, groupId, name, success, errorMessage, timestamp, arguments FROM groupCapabilityTriggerAudit WHERE groupId = ? ORDER BY timestamp DESC LIMIT 50`,
-		groupId,
+		`SELECT id, groupId, name, success, errorMessage, timestamp, arguments FROM groupCapabilityTriggerAudit WHERE groupId = ? ORDER BY timestamp DESC`+limitClause,
+		append([]any{groupId}, limitArgs...)...,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	var audits []restmodels.GroupCapabilityTriggerAudit
 	for rows.Next() {
 		var audit restmodels.GroupCapabilityTriggerAudit
 		if err := rows.Scan(&audit.ID, &audit.GroupID, &audit.Name, &audit.Success, &audit.ErrorMessage, &audit.Timestamp, &audit.Arguments); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		audits = append(audits, audit)
 	}
-	return audits, rows.Err()
+	return audits, total, rows.Err()
 }
 
 func (persistence mariadbPersistence) GetGroupCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.GroupCapabilityIntermediaryActivation, error) {

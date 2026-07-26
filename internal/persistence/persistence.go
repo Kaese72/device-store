@@ -10,19 +10,23 @@ import (
 
 type RestPersistenceDB interface {
 	// Device Control
-	GetDevices(context.Context, []restmodels.Filter) ([]restmodels.Device, error)
+	// GetDevices returns the page of devices matching filters, along with the total
+	// number of devices matching filters (ignoring pagination).
+	GetDevices(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Device, int, error)
 	DeleteDevice(ctx context.Context, storeIdentifier int) error
 	GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error)
 	// Audits
-	GetAttributeAudits(context.Context, []restmodels.Filter) ([]restmodels.AttributeAudit, error)
+	GetAttributeAudits(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.AttributeAudit, int, error)
 	WriteCapabilityTriggerAudit(ctx context.Context, deviceId int, capabilityName string, success bool, errorMessage *string, arguments string) error
-	GetCapabilityTriggerAudits(ctx context.Context, deviceId int) ([]restmodels.CapabilityTriggerAudit, error)
+	GetCapabilityTriggerAudits(ctx context.Context, deviceId int, pagination restmodels.Pagination) ([]restmodels.CapabilityTriggerAudit, int, error)
 	//// Groups
-	GetGroups(context.Context, []restmodels.Filter) ([]restmodels.Group, error)
+	// GetGroups returns the page of groups matching filters, along with the total
+	// number of groups matching filters (ignoring pagination).
+	GetGroups(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Group, int, error)
 	DeleteGroup(ctx context.Context, storeIdentifier int) error
 	GetGroupCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.GroupCapabilityIntermediaryActivation, error)
 	WriteGroupCapabilityTriggerAudit(ctx context.Context, groupId int, capabilityName string, success bool, errorMessage *string, arguments string) error
-	GetGroupCapabilityTriggerAudits(ctx context.Context, groupId int) ([]restmodels.GroupCapabilityTriggerAudit, error)
+	GetGroupCapabilityTriggerAudits(ctx context.Context, groupId int, pagination restmodels.Pagination) ([]restmodels.GroupCapabilityTriggerAudit, int, error)
 }
 
 type IngestPersistenceDB interface {

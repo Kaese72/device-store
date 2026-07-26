@@ -29,22 +29,30 @@ func NewWebApp(persistence persistence.RestPersistenceDB, attendant adapteratten
 	}
 }
 
-// GetDevices returns all devices in the database
+// GetDevices returns a page of devices in the database
 func (app webApp) GetDevices(ctx context.Context, input *struct {
 	Filters string `query:"filters" doc:"a string JSON array of objects containting key, op, and value for filtering"`
+	Offset  int    `query:"offset" default:"0" minimum:"0" doc:"number of matching devices to skip"`
+	Limit   int    `query:"limit" default:"50" minimum:"1" maximum:"200" doc:"maximum number of devices to return"`
 }) (*struct {
-	Body []restmodels.Device
+	TotalCount int `header:"X-Total-Count" doc:"total number of devices matching the filters, ignoring pagination"`
+	Body       []restmodels.Device
 }, error) {
 	filters, err := restmodels.ParseQueryIntoFilters(input.Filters)
 	if err != nil {
 		return nil, err
 	}
-	restDevices, err := app.persistence.GetDevices(ctx, filters)
+	restDevices, total, err := app.persistence.GetDevices(ctx, filters, restmodels.Pagination{Offset: input.Offset, Limit: input.Limit})
+	if err != nil {
+		return nil, err
+	}
 	return &struct {
-		Body []restmodels.Device
+		TotalCount int `header:"X-Total-Count" doc:"total number of devices matching the filters, ignoring pagination"`
+		Body       []restmodels.Device
 	}{
-		Body: restDevices,
-	}, err
+		TotalCount: total,
+		Body:       restDevices,
+	}, nil
 }
 
 func (app webApp) GetDevice(ctx context.Context, input *struct {
@@ -60,7 +68,7 @@ func (app webApp) GetDevice(ctx context.Context, input *struct {
 			Operator: "eq",
 		},
 	}
-	restDevices, err := app.persistence.GetDevices(ctx, filter)
+	restDevices, _, err := app.persistence.GetDevices(ctx, filter, restmodels.Pagination{})
 	if err != nil {
 		return nil, err
 	}
@@ -86,18 +94,24 @@ func (app webApp) DeleteDevice(ctx context.Context, input *struct {
 
 func (app webApp) GetAttributeAudits(ctx context.Context, input *struct {
 	Filters string `query:"filters" doc:"a string JSON array of objects containing key, op, and value for filtering"`
+	Offset  int    `query:"offset" default:"0" minimum:"0" doc:"number of matching audits to skip"`
+	Limit   int    `query:"limit" default:"50" minimum:"1" maximum:"200" doc:"maximum number of audits to return"`
 }) (*struct {
-	Body []restmodels.AttributeAudit
+	TotalCount int `header:"X-Total-Count" doc:"total number of audits matching the filters, ignoring pagination"`
+	Body       []restmodels.AttributeAudit
 }, error) {
 	filters, err := restmodels.ParseQueryIntoFilters(input.Filters)
 	if err != nil {
 		return nil, err
 	}
-	restAudits, err := app.persistence.GetAttributeAudits(ctx, filters)
+	restAudits, total, err := app.persistence.GetAttributeAudits(ctx, filters, restmodels.Pagination{Offset: input.Offset, Limit: input.Limit})
 	if err != nil {
 		return nil, err
 	}
-	return &struct{ Body []restmodels.AttributeAudit }{Body: restAudits}, nil
+	return &struct {
+		TotalCount int `header:"X-Total-Count" doc:"total number of audits matching the filters, ignoring pagination"`
+		Body       []restmodels.AttributeAudit
+	}{TotalCount: total, Body: restAudits}, nil
 }
 
 // StreamDeviceUpdates is a SSE endpoint that sends updates from
@@ -145,17 +159,23 @@ func (app webApp) TriggerDeviceCapability(ctx context.Context, input *struct {
 
 func (app webApp) GetDeviceCapabilityTriggerAudits(ctx context.Context, input *struct {
 	StoreDeviceIdentifier int `path:"storeDeviceIdentifier" doc:"the ID of the device"`
+	Offset                int `query:"offset" default:"0" minimum:"0" doc:"number of matching audits to skip"`
+	Limit                 int `query:"limit" default:"50" minimum:"1" maximum:"200" doc:"maximum number of audits to return"`
 }) (*struct {
-	Body []restmodels.CapabilityTriggerAudit
+	TotalCount int `header:"X-Total-Count" doc:"total number of audits for the device, ignoring pagination"`
+	Body       []restmodels.CapabilityTriggerAudit
 }, error) {
-	audits, err := app.persistence.GetCapabilityTriggerAudits(ctx, input.StoreDeviceIdentifier)
+	audits, total, err := app.persistence.GetCapabilityTriggerAudits(ctx, input.StoreDeviceIdentifier, restmodels.Pagination{Offset: input.Offset, Limit: input.Limit})
 	if err != nil {
 		return nil, err
 	}
 	if audits == nil {
 		audits = []restmodels.CapabilityTriggerAudit{}
 	}
-	return &struct{ Body []restmodels.CapabilityTriggerAudit }{Body: audits}, nil
+	return &struct {
+		TotalCount int `header:"X-Total-Count" doc:"total number of audits for the device, ignoring pagination"`
+		Body       []restmodels.CapabilityTriggerAudit
+	}{TotalCount: total, Body: audits}, nil
 }
 
 func (app webApp) DeleteGroup(ctx context.Context, input *struct {
@@ -200,33 +220,45 @@ func (app webApp) TriggerGroupCapability(ctx context.Context, input *struct {
 
 func (app webApp) GetGroupCapabilityTriggerAudits(ctx context.Context, input *struct {
 	StoreGroupIdentifier int `path:"storeGroupIdentifier" doc:"the ID of the group"`
+	Offset               int `query:"offset" default:"0" minimum:"0" doc:"number of matching audits to skip"`
+	Limit                int `query:"limit" default:"50" minimum:"1" maximum:"200" doc:"maximum number of audits to return"`
 }) (*struct {
-	Body []restmodels.GroupCapabilityTriggerAudit
+	TotalCount int `header:"X-Total-Count" doc:"total number of audits for the group, ignoring pagination"`
+	Body       []restmodels.GroupCapabilityTriggerAudit
 }, error) {
-	audits, err := app.persistence.GetGroupCapabilityTriggerAudits(ctx, input.StoreGroupIdentifier)
+	audits, total, err := app.persistence.GetGroupCapabilityTriggerAudits(ctx, input.StoreGroupIdentifier, restmodels.Pagination{Offset: input.Offset, Limit: input.Limit})
 	if err != nil {
 		return nil, err
 	}
 	if audits == nil {
 		audits = []restmodels.GroupCapabilityTriggerAudit{}
 	}
-	return &struct{ Body []restmodels.GroupCapabilityTriggerAudit }{Body: audits}, nil
+	return &struct {
+		TotalCount int `header:"X-Total-Count" doc:"total number of audits for the group, ignoring pagination"`
+		Body       []restmodels.GroupCapabilityTriggerAudit
+	}{TotalCount: total, Body: audits}, nil
 }
 
 func (app webApp) GetGroups(ctx context.Context, input *struct {
 	Filters string `query:"filters" doc:"a string JSON array of objects containing key, op, and value for filtering"`
+	Offset  int    `query:"offset" default:"0" minimum:"0" doc:"number of matching groups to skip"`
+	Limit   int    `query:"limit" default:"50" minimum:"1" maximum:"200" doc:"maximum number of groups to return"`
 }) (*struct {
-	Body []restmodels.Group
+	TotalCount int `header:"X-Total-Count" doc:"total number of groups matching the filters, ignoring pagination"`
+	Body       []restmodels.Group
 }, error) {
 	filters, err := restmodels.ParseQueryIntoFilters(input.Filters)
 	if err != nil {
 		return nil, err
 	}
-	restGroups, err := app.persistence.GetGroups(ctx, filters)
+	restGroups, total, err := app.persistence.GetGroups(ctx, filters, restmodels.Pagination{Offset: input.Offset, Limit: input.Limit})
 	if err != nil {
 		return nil, err
 	}
-	return &struct{ Body []restmodels.Group }{Body: restGroups}, nil
+	return &struct {
+		TotalCount int `header:"X-Total-Count" doc:"total number of groups matching the filters, ignoring pagination"`
+		Body       []restmodels.Group
+	}{TotalCount: total, Body: restGroups}, nil
 }
 
 func (app webApp) GetGroup(ctx context.Context, input *struct {
@@ -242,7 +274,7 @@ func (app webApp) GetGroup(ctx context.Context, input *struct {
 			Value:    input.StoreGroupIdentifier,
 		},
 	}
-	restGroups, err := app.persistence.GetGroups(ctx, filter)
+	restGroups, _, err := app.persistence.GetGroups(ctx, filter, restmodels.Pagination{})
 	if err != nil {
 		return nil, err
 	}
