@@ -197,6 +197,71 @@ func TestEqualRest(t *testing.T) {
 	}
 }
 
+func TestInClause(t *testing.T) {
+	tests := []struct {
+		name         string
+		value        string
+		expectClause string
+		expectValues []string
+		expectError  bool
+	}{
+		{
+			name:         "single value",
+			value:        "1",
+			expectClause: "id IN (?)",
+			expectValues: []string{"1"},
+		},
+		{
+			name:         "multiple values",
+			value:        "1,2,3",
+			expectClause: "id IN (?,?,?)",
+			expectValues: []string{"1", "2", "3"},
+		},
+		{
+			name:         "whitespace around values",
+			value:        " 1 , 2 ",
+			expectClause: "id IN (?,?)",
+			expectValues: []string{"1", "2"},
+		},
+		{
+			name:        "non-integer value",
+			value:       "1,abc",
+			expectError: true,
+		},
+		{
+			name:        "empty value",
+			value:       "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clause, values, err := inClause("id", tt.value)
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("expected error, got none")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if clause != tt.expectClause {
+				t.Errorf("clause = %q, expected %q", clause, tt.expectClause)
+			}
+			if len(values) != len(tt.expectValues) {
+				t.Fatalf("values = %v, expected %v", values, tt.expectValues)
+			}
+			for i := range values {
+				if values[i] != tt.expectValues[i] {
+					t.Errorf("value %d = %q, expected %q", i, values[i], tt.expectValues[i])
+				}
+			}
+		})
+	}
+}
+
 func ptrBool(b bool) *bool {
 	return &b
 }

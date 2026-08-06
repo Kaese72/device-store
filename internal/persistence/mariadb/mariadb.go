@@ -49,7 +49,27 @@ var deviceFilters = map[string]map[string]func(string) (string, []string, error)
 			}
 			return "", nil, huma.Error400BadRequest("id filter must be an integer value")
 		},
+		"in": func(value string) (string, []string, error) {
+			return inClause("id", value)
+		},
 	},
+}
+
+// inClause builds a "column IN (?,?,...)" fragment from a comma-separated
+// list of integer values, e.g. "1,2,3". Whitespace around each value is
+// ignored; an empty list or any non-integer value is a 400 error.
+func inClause(column string, value string) (string, []string, error) {
+	rawValues := strings.Split(value, ",")
+	values := make([]string, 0, len(rawValues))
+	for _, rawValue := range rawValues {
+		trimmed := strings.TrimSpace(rawValue)
+		if !regexp.MustCompile(`^\d+$`).MatchString(trimmed) {
+			return "", nil, huma.Error400BadRequest(fmt.Sprintf("%s filter must be a comma-separated list of integer values", column))
+		}
+		values = append(values, trimmed)
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(values)), ",")
+	return fmt.Sprintf("%s IN (%s)", column, placeholders), values, nil
 }
 
 // validateTimestamp validates that the valis is on the format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'
@@ -227,10 +247,17 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		"(SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(\"name\", name)), JSON_ARRAY()) FROM deviceTriggers WHERE deviceTriggers.deviceId = devices.id) as triggers",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM devices`
-	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, deviceFilters)
+	attributeFilters, otherFilters := intermediaries.SplitAttributeFilters(filters)
+	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(otherFilters, deviceFilters)
 	if err != nil {
 		return nil, 0, err
 	}
+	attributeFragments, attributeValues, err := intermediaries.TranslateAttributeFiltersToQueryFragments(attributeFilters, "devices.id")
+	if err != nil {
+		return nil, 0, err
+	}
+	queryFragments = append(queryFragments, attributeFragments...)
+	variables = append(variables, attributeValues...)
 	whereClause := strings.Join(queryFragments, " AND ")
 	if whereClause != "" {
 		query += " WHERE " + whereClause
