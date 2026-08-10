@@ -51,6 +51,7 @@ Supported type-prefixed operators:
 - `numeric-aeq` — approximate numeric equality, for tolerating floating
   point imprecision.
 - `numeric-lt` / `numeric-gt` — numeric less-than / greater-than.
+- `text-contains` — case-insensitive substring match.
 - `text-eq` — exact text equality.
 
 Requesting a type/comparison combination that doesn't exist (for example

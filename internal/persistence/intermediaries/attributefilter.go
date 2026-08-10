@@ -20,6 +20,7 @@ type attributeOperator struct {
 	column     string // the deviceAttributes column to compare against
 	comparison string // the SQL comparison operator to use
 	approx     bool   // whether to compare with a tolerance instead of exact equality
+	contains   bool   // whether to do a case-insensitive substring match instead of equality
 }
 
 // attributeOperators defines the type-prefixed operators available when
@@ -27,13 +28,19 @@ type attributeOperator struct {
 // typed columns (boolean, numeric, text) is compared against, since an
 // attribute's type isn't known from its name alone.
 var attributeOperators = map[string]attributeOperator{
-	"bool-eq":     {column: "booleanValue", comparison: "="},
-	"numeric-eq":  {column: "numericValue", comparison: "="},
-	"numeric-aeq": {column: "numericValue", comparison: "=", approx: true},
-	"numeric-lt":  {column: "numericValue", comparison: "<"},
-	"numeric-gt":  {column: "numericValue", comparison: ">"},
-	"text-eq":     {column: "textValue", comparison: "="},
+	"bool-eq":       {column: "booleanValue", comparison: "="},
+	"numeric-eq":    {column: "numericValue", comparison: "="},
+	"numeric-aeq":   {column: "numericValue", comparison: "=", approx: true},
+	"numeric-lt":    {column: "numericValue", comparison: "<"},
+	"numeric-gt":    {column: "numericValue", comparison: ">"},
+	"text-eq":       {column: "textValue", comparison: "="},
+	"text-contains": {column: "textValue", contains: true},
 }
+
+// likeEscaper escapes the LIKE wildcard characters '%' and '_' (and the
+// escape character itself) so a user-supplied substring is matched
+// literally rather than as a pattern.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // IsAttributeFilterKey reports whether a filter key targets a device
 // attribute, i.e. is of the form "attribute.<name>".
@@ -99,6 +106,15 @@ func TranslateAttributeFiltersToQueryFragments(filters []restmodels.Filter, devi
 				deviceIdColumn, op.column,
 			))
 			values = append(values, name, comparisonValue, attributeApproxEpsilon)
+			continue
+		}
+		if op.contains {
+			pattern := "%" + likeEscaper.Replace(comparisonValue.(string)) + "%"
+			fragments = append(fragments, fmt.Sprintf(
+				"EXISTS (SELECT 1 FROM deviceAttributes WHERE deviceAttributes.deviceId = %s AND deviceAttributes.name = ? AND LOWER(deviceAttributes.%s) LIKE LOWER(?) ESCAPE '\\\\')",
+				deviceIdColumn, op.column,
+			))
+			values = append(values, name, pattern)
 			continue
 		}
 		fragments = append(fragments, fmt.Sprintf(

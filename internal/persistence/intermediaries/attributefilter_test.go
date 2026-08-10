@@ -81,6 +81,16 @@ func TestTranslateAttributeFiltersToQueryFragments(t *testing.T) {
 			expectValue: []any{"name", "hello"},
 		},
 		{
+			name:        "text contains",
+			filter:      restmodels.Filter{Key: "attribute.name", Operator: "text-contains", Value: "ell"},
+			expectValue: []any{"name", "%ell%"},
+		},
+		{
+			name:        "text contains escapes LIKE wildcards",
+			filter:      restmodels.Filter{Key: "attribute.name", Operator: "text-contains", Value: "50%_off"},
+			expectValue: []any{"name", `%50\%\_off%`},
+		},
+		{
 			name:        "unsupported operator for attributes",
 			filter:      restmodels.Filter{Key: "attribute.active", Operator: "bool-lt", Value: "true"},
 			expectError: true,
