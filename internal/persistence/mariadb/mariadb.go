@@ -315,6 +315,36 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 	return retDevices, total, rows.Err()
 }
 
+// GetAttributeStatistics returns, for each attribute name present in the
+// deviceAttributes table (optionally restricted to names), how many devices
+// store that attribute's value as each of the three possible types.
+func (persistence mariadbPersistence) GetAttributeStatistics(ctx context.Context, names []string) ([]restmodels.AttributeStatistic, error) {
+	query := `SELECT name, SUM(booleanValue IS NOT NULL), SUM(textValue IS NOT NULL), SUM(numericValue IS NOT NULL) FROM deviceAttributes`
+	var args []any
+	if len(names) > 0 {
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(names)), ",")
+		query += " WHERE name IN (" + placeholders + ")"
+		for _, name := range names {
+			args = append(args, name)
+		}
+	}
+	query += " GROUP BY name ORDER BY name ASC"
+	rows, err := persistence.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	stats := []restmodels.AttributeStatistic{}
+	for rows.Next() {
+		var stat restmodels.AttributeStatistic
+		if err := rows.Scan(&stat.Name, &stat.NBoolean, &stat.NText, &stat.NNumeric); err != nil {
+			return nil, err
+		}
+		stats = append(stats, stat)
+	}
+	return stats, rows.Err()
+}
+
 func (persistence mariadbPersistence) DeleteGroup(ctx context.Context, storeIdentifier int) error {
 	result, err := persistence.db.ExecContext(ctx, `DELETE FROM groups WHERE id = ?`, storeIdentifier)
 	if err != nil {

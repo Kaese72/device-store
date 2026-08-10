@@ -71,3 +71,23 @@ Matching semantics for attribute filters:
   an attribute whose value is text), it does not match — there is no
   cross-type coercion.
 
+### Attribute statistics
+
+`GET /device-store/v0/attributes/statistics` returns, for each attribute
+name in use across all devices, how many devices store that attribute's
+value as each of the three possible types:
+
+```
+GET /device-store/v0/attributes/statistics
+[
+  {"name": "active", "n-boolean": 12, "n-text": 0, "n-numeric": 0},
+  {"name": "color-ct", "n-boolean": 0, "n-text": 0, "n-numeric": 8}
+]
+```
+
+The optional `names` query parameter takes a comma-separated list of
+attribute names to restrict the results to, e.g.
+`?names=active,color-ct`. Unrecognized names simply produce no matching
+entry — this endpoint doesn't validate `names` against a fixed set, since
+attribute names are dynamic.
+

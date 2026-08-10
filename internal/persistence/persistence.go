@@ -15,6 +15,10 @@ type RestPersistenceDB interface {
 	GetDevices(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Device, int, error)
 	DeleteDevice(ctx context.Context, storeIdentifier int) error
 	GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error)
+	// GetAttributeStatistics returns, for each known attribute name (optionally
+	// restricted to names), how many devices store that attribute's value
+	// under each of the three possible types.
+	GetAttributeStatistics(ctx context.Context, names []string) ([]restmodels.AttributeStatistic, error)
 	// Audits
 	GetAttributeAudits(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.AttributeAudit, int, error)
 	WriteCapabilityTriggerAudit(ctx context.Context, deviceId int, capabilityName string, success bool, errorMessage *string, arguments string) error

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/adapters"
@@ -112,6 +113,30 @@ func (app webApp) GetAttributeAudits(ctx context.Context, input *struct {
 		TotalCount int `header:"X-Total-Count" doc:"total number of audits matching the filters, ignoring pagination"`
 		Body       []restmodels.AttributeAudit
 	}{TotalCount: total, Body: restAudits}, nil
+}
+
+// GetAttributeStatistics returns, per attribute name, how many devices store
+// that attribute's value as each of the three possible types.
+func (app webApp) GetAttributeStatistics(ctx context.Context, input *struct {
+	Names string `query:"names" doc:"a comma separated list of attribute names to restrict the results to; if omitted, all attribute names are returned"`
+}) (*struct {
+	Body []restmodels.AttributeStatistic
+}, error) {
+	var names []string
+	for _, name := range strings.Split(input.Names, ",") {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		names = append(names, trimmed)
+	}
+	stats, err := app.persistence.GetAttributeStatistics(ctx, names)
+	if err != nil {
+		return nil, err
+	}
+	return &struct {
+		Body []restmodels.AttributeStatistic
+	}{Body: stats}, nil
 }
 
 // StreamDeviceUpdates is a SSE endpoint that sends updates from
