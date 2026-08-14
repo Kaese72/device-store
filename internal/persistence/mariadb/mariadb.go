@@ -8,6 +8,7 @@ import (
 	"math"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -663,6 +664,112 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, pagination re
 		groups = append(groups, group)
 	}
 	return groups, total, rows.Err()
+}
+
+// groupSearchCandidatePoolSize is how many candidates round 1 (the SQL
+// char_overlap_ratio pre-filter) selects for round 2 (Levenshtein ranking in
+// Go) to choose the final results from.
+const groupSearchCandidatePoolSize = 50
+
+func (persistence mariadbPersistence) SearchGroupsByName(ctx context.Context, query string, limit int) ([]restmodels.GroupSearchResult, error) {
+	return searchGroupsByNameTx(ctx, query, limit, persistence.db)
+}
+
+func searchGroupsByNameTx(ctx context.Context, query string, limit int, tx queryAble) ([]restmodels.GroupSearchResult, error) {
+	trimmedQuery := strings.TrimSpace(query)
+	if trimmedQuery == "" {
+		return []restmodels.GroupSearchResult{}, nil
+	}
+	candidatePoolSize := groupSearchCandidatePoolSize
+	if limit > candidatePoolSize {
+		candidatePoolSize = limit
+	}
+	// Round 1: cheap character-overlap heuristic in SQL to pick a candidate
+	// pool, since MariaDB has no built-in Levenshtein support here.
+	rows, err := tx.QueryContext(
+		ctx,
+		`SELECT id, name FROM groups ORDER BY char_overlap_ratio(?, name) DESC, id ASC LIMIT ?`,
+		trimmedQuery, candidatePoolSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type scoredGroup struct {
+		id         int
+		name       string
+		similarity float64
+	}
+	var candidates []scoredGroup
+	queryRunes := []rune(strings.ToLower(trimmedQuery))
+	for rows.Next() {
+		var id int
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, err
+		}
+		nameRunes := []rune(strings.ToLower(name))
+		distance := levenshteinDistance(queryRunes, nameRunes)
+		maxLen := len(queryRunes)
+		if len(nameRunes) > maxLen {
+			maxLen = len(nameRunes)
+		}
+		similarity := 1.0
+		if maxLen > 0 {
+			similarity = 1 - float64(distance)/float64(maxLen)
+		}
+		candidates = append(candidates, scoredGroup{id: id, name: name, similarity: similarity})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Round 2: re-rank the candidate pool by actual Levenshtein similarity.
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].similarity > candidates[j].similarity
+	})
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+
+	results := make([]restmodels.GroupSearchResult, 0, len(candidates))
+	for _, c := range candidates {
+		results = append(results, restmodels.GroupSearchResult{
+			ID:        c.id,
+			Name:      c.name,
+			Relevance: fmt.Sprintf("%.4f", c.similarity),
+		})
+	}
+	return results, nil
+}
+
+// levenshteinDistance returns the classic edit distance between a and b,
+// operating on runes so multi-byte characters count as one each.
+func levenshteinDistance(a, b []rune) int {
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+	prev := make([]int, len(b)+1)
+	curr := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		curr[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			curr[j] = min(prev[j]+1, curr[j-1]+1, prev[j-1]+cost)
+		}
+		prev, curr = curr, prev
+	}
+	return prev[len(b)]
 }
 
 func (persistence mariadbPersistence) PostGroup(ctx context.Context, group ingestmodels.IngestGroup) error {

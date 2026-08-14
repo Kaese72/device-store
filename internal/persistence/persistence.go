@@ -27,6 +27,9 @@ type RestPersistenceDB interface {
 	// GetGroups returns the page of groups matching filters, along with the total
 	// number of groups matching filters (ignoring pagination).
 	GetGroups(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Group, int, error)
+	// SearchGroupsByName performs a fuzzy search for groups by name, returning
+	// up to limit results ordered from best to worst match.
+	SearchGroupsByName(ctx context.Context, query string, limit int) ([]restmodels.GroupSearchResult, error)
 	DeleteGroup(ctx context.Context, storeIdentifier int) error
 	GetGroupCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.GroupCapabilityIntermediaryActivation, error)
 	WriteGroupCapabilityTriggerAudit(ctx context.Context, groupId int, capabilityName string, success bool, errorMessage *string, arguments string) error

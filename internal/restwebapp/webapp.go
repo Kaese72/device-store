@@ -286,6 +286,26 @@ func (app webApp) GetGroups(ctx context.Context, input *struct {
 	}{TotalCount: total, Body: restGroups}, nil
 }
 
+// SearchGroups performs a fuzzy search for groups by name, returning results
+// ordered from best to worst match.
+func (app webApp) SearchGroups(ctx context.Context, input *struct {
+	Query string `query:"q" doc:"the search term to fuzzy match against group names"`
+	Limit int    `query:"limit" default:"10" minimum:"1" maximum:"50" doc:"maximum number of results to return"`
+}) (*struct {
+	Body []restmodels.GroupSearchResult
+}, error) {
+	if strings.TrimSpace(input.Query) == "" {
+		return nil, huma.Error400BadRequest("q must not be empty")
+	}
+	results, err := app.persistence.SearchGroupsByName(ctx, input.Query, input.Limit)
+	if err != nil {
+		return nil, err
+	}
+	return &struct {
+		Body []restmodels.GroupSearchResult
+	}{Body: results}, nil
+}
+
 func (app webApp) GetGroup(ctx context.Context, input *struct {
 	StoreGroupIdentifier string `path:"storeGroupIdentifier" doc:"the ID of the group to retrieve"`
 }) (*struct {
