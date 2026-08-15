@@ -54,6 +54,15 @@ var deviceFilters = map[string]map[string]func(string) (string, []string, error)
 			return inClause("id", value)
 		},
 	},
+	"name": {
+		"text-eq": func(value string) (string, []string, error) {
+			return "name = ?", []string{value}, nil
+		},
+		"text-contains": func(value string) (string, []string, error) {
+			pattern := "%" + intermediaries.LikeEscaper.Replace(value) + "%"
+			return "LOWER(name) LIKE LOWER(?) ESCAPE '\\\\'", []string{pattern}, nil
+		},
+	},
 }
 
 // inClause builds a "column IN (?,?,...)" fragment from a comma-separated

@@ -37,10 +37,10 @@ var attributeOperators = map[string]attributeOperator{
 	"text-contains": {column: "textValue", contains: true},
 }
 
-// likeEscaper escapes the LIKE wildcard characters '%' and '_' (and the
+// LikeEscaper escapes the LIKE wildcard characters '%' and '_' (and the
 // escape character itself) so a user-supplied substring is matched
 // literally rather than as a pattern.
-var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+var LikeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // IsAttributeFilterKey reports whether a filter key targets a device
 // attribute, i.e. is of the form "attribute.<name>".
@@ -109,7 +109,7 @@ func TranslateAttributeFiltersToQueryFragments(filters []restmodels.Filter, devi
 			continue
 		}
 		if op.contains {
-			pattern := "%" + likeEscaper.Replace(comparisonValue.(string)) + "%"
+			pattern := "%" + LikeEscaper.Replace(comparisonValue.(string)) + "%"
 			fragments = append(fragments, fmt.Sprintf(
 				"EXISTS (SELECT 1 FROM deviceAttributes WHERE deviceAttributes.deviceId = %s AND deviceAttributes.name = ? AND LOWER(deviceAttributes.%s) LIKE LOWER(?) ESCAPE '\\\\')",
 				deviceIdColumn, op.column,
