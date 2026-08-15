@@ -83,6 +83,27 @@ func (app webApp) GetDevice(ctx context.Context, input *struct {
 	}, err
 }
 
+// PatchDevice partially updates a device's editable fields (currently just Name).
+func (app webApp) PatchDevice(ctx context.Context, input *struct {
+	StoreDeviceIdentifier int `path:"storeDeviceIdentifier" doc:"the ID of the device to update"`
+	Body                  struct {
+		Name *string `json:"name,omitempty" maxLength:"255" doc:"A human-readable name for this device. May be empty."`
+	}
+}) (*struct {
+	Body restmodels.Device
+}, error) {
+	if input.Body.Name == nil {
+		return nil, huma.Error400BadRequest("no updatable fields provided")
+	}
+	device, err := app.persistence.UpdateDeviceName(ctx, input.StoreDeviceIdentifier, *input.Body.Name)
+	if err != nil {
+		return nil, err
+	}
+	return &struct {
+		Body restmodels.Device
+	}{Body: device}, nil
+}
+
 func (app webApp) DeleteDevice(ctx context.Context, input *struct {
 	StoreDeviceIdentifier int `path:"storeDeviceIdentifier" doc:"the ID of the device to forget"`
 }) (*struct{}, error) {

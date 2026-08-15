@@ -80,6 +80,7 @@ func main() {
 	huma.Get(publicAPI, "/device-store/v0/devices", restWebapp.GetDevices)
 	huma.Get(publicAPI, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.GetDevice)
 	huma.Delete(publicAPI, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.DeleteDevice)
+	huma.Patch(publicAPI, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}", restWebapp.PatchDevice)
 	huma.Post(publicAPI, "/device-store/v0/devices/{storeDeviceIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerDeviceCapability)
 
 	sse.Register(publicAPI, huma.Operation{

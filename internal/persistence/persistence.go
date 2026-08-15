@@ -14,6 +14,8 @@ type RestPersistenceDB interface {
 	// number of devices matching filters (ignoring pagination).
 	GetDevices(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Device, int, error)
 	DeleteDevice(ctx context.Context, storeIdentifier int) error
+	// UpdateDeviceName sets the human-readable name of a device and returns the updated device.
+	UpdateDeviceName(ctx context.Context, storeIdentifier int, name string) (restmodels.Device, error)
 	GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error)
 	// GetAttributeStatistics returns, for each known attribute name (optionally
 	// restricted to names), how many devices store that attribute's value

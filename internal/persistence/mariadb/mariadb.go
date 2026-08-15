@@ -239,6 +239,7 @@ func countRows(ctx context.Context, tx queryAble, table string, whereClause stri
 func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Device, int, error) {
 	fields := []string{
 		"id",
+		"name",
 		"bridgeIdentifier",
 		"adapterId",
 		"updated",
@@ -282,7 +283,7 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 		var attributesBytes []byte
 		var triggerBytes []byte
 		var groupIdsBytes []byte
-		err = rows.Scan(&device.ID, &device.BridgeIdentifier, &device.AdapterId, &device.Updated, &attributesBytes, &capabilitiesBytes, &groupIdsBytes, &triggerBytes)
+		err = rows.Scan(&device.ID, &device.Name, &device.BridgeIdentifier, &device.AdapterId, &device.Updated, &attributesBytes, &capabilitiesBytes, &groupIdsBytes, &triggerBytes)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -374,6 +375,27 @@ func (persistence mariadbPersistence) DeleteDevice(ctx context.Context, storeIde
 		return huma.Error404NotFound(fmt.Sprintf("device %d not found", storeIdentifier))
 	}
 	return nil
+}
+
+// UpdateDeviceName sets the human-readable name of a device and returns the updated device.
+func (persistence mariadbPersistence) UpdateDeviceName(ctx context.Context, storeIdentifier int, name string) (restmodels.Device, error) {
+	// Note: rowsAffected from this UPDATE is not a reliable existence check, since
+	// MySQL reports 0 affected rows when the new value equals the existing one.
+	// Existence is instead verified by the GetDevices lookup below.
+	_, err := persistence.db.ExecContext(ctx, `UPDATE devices SET name = ? WHERE id = ?`, name, storeIdentifier)
+	if err != nil {
+		return restmodels.Device{}, err
+	}
+	devices, _, err := persistence.GetDevices(ctx, []restmodels.Filter{
+		{Key: "id", Operator: "eq", Value: fmt.Sprintf("%d", storeIdentifier)},
+	}, restmodels.Pagination{})
+	if err != nil {
+		return restmodels.Device{}, err
+	}
+	if len(devices) == 0 {
+		return restmodels.Device{}, huma.Error404NotFound(fmt.Sprintf("device %d not found", storeIdentifier))
+	}
+	return devices[0], nil
 }
 
 // GetAttributeAudits
