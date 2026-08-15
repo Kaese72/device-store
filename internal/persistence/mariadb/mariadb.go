@@ -602,7 +602,7 @@ func (persistence mariadbPersistence) PostDevice(ctx context.Context, device ing
 
 func (persistence mariadbPersistence) GetDeviceCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.DeviceCapabilityIntermediaryActivation, error) {
 	capability := intermediaries.DeviceCapabilityIntermediaryActivation{}
-	row := persistence.db.QueryRowContext(ctx, `SELECT bridgeIdentifier, name, adapterId FROM deviceCapabilities INNER JOIN devices on deviceCapabilities.deviceId = devices.id WHERE deviceId = ? AND name = ?`, storeIdentifier, capabilityName)
+	row := persistence.db.QueryRowContext(ctx, `SELECT bridgeIdentifier, deviceCapabilities.name, adapterId FROM deviceCapabilities INNER JOIN devices on deviceCapabilities.deviceId = devices.id WHERE deviceId = ? AND deviceCapabilities.name = ?`, storeIdentifier, capabilityName)
 	err := row.Scan(&capability.BridgeIdentifier, &capability.Name, &capability.AdapterId)
 	if err != nil {
 		if err != sql.ErrNoRows {
