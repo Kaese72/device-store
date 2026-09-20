@@ -15,6 +15,7 @@ require (
 )
 
 require (
+	github.com/Kaese72/authentication v0.0.4
 	github.com/danielgtaylor/huma/v2 v2.34.1
 	github.com/testcontainers/testcontainers-go/modules/mariadb v0.44.0
 )

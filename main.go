@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Kaese72/authentication/usertoken"
 	"github.com/Kaese72/device-store/eventmodels"
 	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/config"
@@ -14,7 +15,6 @@ import (
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence/mariadb"
 	"github.com/Kaese72/device-store/internal/restwebapp"
-	"github.com/Kaese72/huemie-lib/middleware"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humamux"
 	"github.com/danielgtaylor/huma/v2/sse"
@@ -62,7 +62,7 @@ func main() {
 	restWebapp := restwebapp.NewWebApp(dbPersistence, adapterTrigger, deviceUpdates)
 	ingestWebapp := ingestwebapp.NewWebApp(dbPersistence, deviceUpdateChan)
 
-	pubKey, err := middleware.LoadPublicKeyFromFile(config.Loaded.Auth.RSAPublicKeyPath)
+	pubKey, err := usertoken.LoadPublicKeyFromFile(config.Loaded.Auth.RSAPublicKeyPath)
 	if err != nil {
 		logging.Error(err.Error(), context.Background())
 		os.Exit(1)
@@ -70,7 +70,7 @@ func main() {
 
 	// Public router (device-store + device-ingest)
 	publicRouter := mux.NewRouter()
-	publicRouter.Use(middleware.UseTokenMiddleware(pubKey, "/device-ingest/", "/device-store/openapi", "/device-store/docs"))
+	publicRouter.Use(usertoken.Middleware(pubKey, "/device-ingest/", "/device-store/openapi", "/device-store/docs"))
 	publicRouter.Use(ingestwebapp.DeviceIngestJWTMiddleware(config.Loaded.DeviceIngest.JWTSecret))
 	publicHumaConfig := huma.DefaultConfig("device-store", "1.0.0")
 	publicHumaConfig.OpenAPIPath = "/device-store/openapi"
