@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Kaese72/authentication/usertoken"
 	"github.com/Kaese72/device-store/internal/adapterattendant"
 	"github.com/Kaese72/device-store/internal/adapters"
 	"github.com/Kaese72/device-store/internal/events"
@@ -15,6 +16,51 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/sse"
 )
+
+// requireDevicesView returns a huma error unless the caller (as put in ctx by
+// usertoken.Middleware) may view devices, and requireDevicesModify unless
+// they may modify them. Every endpoint in this file calls one of the two
+// first; admins always pass.
+func requireDevicesView(ctx context.Context) error {
+	permissions, ok := usertoken.PermissionsFromContext(ctx)
+	if !ok || !permissions.HasView(usertoken.ResourceDevices) {
+		return huma.Error403Forbidden("view access to devices is required")
+	}
+	return nil
+}
+
+func requireDevicesModify(ctx context.Context) error {
+	permissions, ok := usertoken.PermissionsFromContext(ctx)
+	if !ok || !permissions.HasModify(usertoken.ResourceDevices) {
+		return huma.Error403Forbidden("modify access to devices is required")
+	}
+	return nil
+}
+
+// GetDevice, TriggerDeviceCapability and TriggerGroupCapability are each
+// registered on both the public router (behind usertoken.Middleware) and the
+// unauthenticated internal router that ittt-orchestrator's rule-state calls
+// through (see main.go - restricted by NetworkPolicy instead of a token).
+// PermissionsFromContext reports !ok on that internal path since no
+// middleware ever ran, so requireDevices{View,Modify}IfPresent treat that as
+// the trusted internal caller rather than "no access", and only enforce the
+// permission when a token context is actually present (i.e. the public
+// router was used).
+func requireDevicesViewIfPresent(ctx context.Context) error {
+	permissions, ok := usertoken.PermissionsFromContext(ctx)
+	if ok && !permissions.HasView(usertoken.ResourceDevices) {
+		return huma.Error403Forbidden("view access to devices is required")
+	}
+	return nil
+}
+
+func requireDevicesModifyIfPresent(ctx context.Context) error {
+	permissions, ok := usertoken.PermissionsFromContext(ctx)
+	if ok && !permissions.HasModify(usertoken.ResourceDevices) {
+		return huma.Error403Forbidden("modify access to devices is required")
+	}
+	return nil
+}
 
 type webApp struct {
 	persistence persistence.RestPersistenceDB
@@ -39,6 +85,9 @@ func (app webApp) GetDevices(ctx context.Context, input *struct {
 	TotalCount int `header:"X-Total-Count" doc:"total number of devices matching the filters, ignoring pagination"`
 	Body       []restmodels.Device
 }, error) {
+	if err := requireDevicesView(ctx); err != nil {
+		return nil, err
+	}
 	filters, err := restmodels.ParseQueryIntoFilters(input.Filters)
 	if err != nil {
 		return nil, err
@@ -61,6 +110,9 @@ func (app webApp) GetDevice(ctx context.Context, input *struct {
 }) (*struct {
 	Body restmodels.Device
 }, error) {
+	if err := requireDevicesViewIfPresent(ctx); err != nil {
+		return nil, err
+	}
 	// Create a filter for the deviceId and use the GetDevices method
 	filter := []restmodels.Filter{
 		{
@@ -92,6 +144,9 @@ func (app webApp) PatchDevice(ctx context.Context, input *struct {
 }) (*struct {
 	Body restmodels.Device
 }, error) {
+	if err := requireDevicesModify(ctx); err != nil {
+		return nil, err
+	}
 	if input.Body.Name == nil {
 		return nil, huma.Error400BadRequest("no updatable fields provided")
 	}
@@ -107,6 +162,9 @@ func (app webApp) PatchDevice(ctx context.Context, input *struct {
 func (app webApp) DeleteDevice(ctx context.Context, input *struct {
 	StoreDeviceIdentifier int `path:"storeDeviceIdentifier" doc:"the ID of the device to forget"`
 }) (*struct{}, error) {
+	if err := requireDevicesModify(ctx); err != nil {
+		return nil, err
+	}
 	err := app.persistence.DeleteDevice(ctx, input.StoreDeviceIdentifier)
 	if err != nil {
 		return nil, err
@@ -122,6 +180,9 @@ func (app webApp) GetAttributeAudits(ctx context.Context, input *struct {
 	TotalCount int `header:"X-Total-Count" doc:"total number of audits matching the filters, ignoring pagination"`
 	Body       []restmodels.AttributeAudit
 }, error) {
+	if err := requireDevicesView(ctx); err != nil {
+		return nil, err
+	}
 	filters, err := restmodels.ParseQueryIntoFilters(input.Filters)
 	if err != nil {
 		return nil, err
@@ -143,6 +204,9 @@ func (app webApp) GetAttributeStatistics(ctx context.Context, input *struct {
 }) (*struct {
 	Body []restmodels.AttributeStatistic
 }, error) {
+	if err := requireDevicesView(ctx); err != nil {
+		return nil, err
+	}
 	var names []string
 	for _, name := range strings.Split(input.Names, ",") {
 		trimmed := strings.TrimSpace(name)
@@ -162,6 +226,10 @@ func (app webApp) GetAttributeStatistics(ctx context.Context, input *struct {
 
 // StreamDeviceUpdates is a SSE endpoint that sends updates from
 func (app webApp) StreamDeviceUpdates(ctx context.Context, input *struct{}, send sse.Sender) {
+	if err := requireDevicesView(ctx); err != nil {
+		logging.ErrorErr(err, ctx)
+		return
+	}
 	// writer.Header().Set("Access-Control-Allow-Origin", "*")
 	deviceUpdates := app.events.Subscribe(ctx)
 	for update := range deviceUpdates {
@@ -178,6 +246,9 @@ func (app webApp) TriggerDeviceCapability(ctx context.Context, input *struct {
 	CapabilityID          string                           `path:"capabilityID" doc:"the capability to trigger"`
 	Body                  *restmodels.DeviceCapabilityArgs `body:""`
 }) (*struct{}, error) {
+	if err := requireDevicesModifyIfPresent(ctx); err != nil {
+		return nil, err
+	}
 	logging.Info(fmt.Sprintf("Triggering capability '%s' of device '%d'", input.CapabilityID, input.StoreDeviceIdentifier), ctx)
 	capability, err := app.persistence.GetDeviceCapabilityForActivation(ctx, input.StoreDeviceIdentifier, input.CapabilityID)
 	if err != nil {
@@ -211,6 +282,9 @@ func (app webApp) GetDeviceCapabilityTriggerAudits(ctx context.Context, input *s
 	TotalCount int `header:"X-Total-Count" doc:"total number of audits for the device, ignoring pagination"`
 	Body       []restmodels.CapabilityTriggerAudit
 }, error) {
+	if err := requireDevicesView(ctx); err != nil {
+		return nil, err
+	}
 	audits, total, err := app.persistence.GetCapabilityTriggerAudits(ctx, input.StoreDeviceIdentifier, restmodels.Pagination{Offset: input.Offset, Limit: input.Limit})
 	if err != nil {
 		return nil, err
@@ -227,6 +301,9 @@ func (app webApp) GetDeviceCapabilityTriggerAudits(ctx context.Context, input *s
 func (app webApp) DeleteGroup(ctx context.Context, input *struct {
 	StoreGroupIdentifier int `path:"storeGroupIdentifier" doc:"the ID of the group to forget"`
 }) (*struct{}, error) {
+	if err := requireDevicesModify(ctx); err != nil {
+		return nil, err
+	}
 	err := app.persistence.DeleteGroup(ctx, input.StoreGroupIdentifier)
 	if err != nil {
 		return nil, err
@@ -239,6 +316,9 @@ func (app webApp) TriggerGroupCapability(ctx context.Context, input *struct {
 	CapabilityID         string                           `path:"capabilityID" doc:"the capability to trigger"`
 	Body                 *restmodels.DeviceCapabilityArgs `body:""`
 }) (*struct{}, error) {
+	if err := requireDevicesModifyIfPresent(ctx); err != nil {
+		return nil, err
+	}
 	logging.Info(fmt.Sprintf("Triggering capability '%s' of group '%d'", input.CapabilityID, input.StoreGroupIdentifier), ctx)
 	capability, err := app.persistence.GetGroupCapabilityForActivation(ctx, input.StoreGroupIdentifier, input.CapabilityID)
 	if err != nil {
@@ -272,6 +352,9 @@ func (app webApp) GetGroupCapabilityTriggerAudits(ctx context.Context, input *st
 	TotalCount int `header:"X-Total-Count" doc:"total number of audits for the group, ignoring pagination"`
 	Body       []restmodels.GroupCapabilityTriggerAudit
 }, error) {
+	if err := requireDevicesView(ctx); err != nil {
+		return nil, err
+	}
 	audits, total, err := app.persistence.GetGroupCapabilityTriggerAudits(ctx, input.StoreGroupIdentifier, restmodels.Pagination{Offset: input.Offset, Limit: input.Limit})
 	if err != nil {
 		return nil, err
@@ -293,6 +376,9 @@ func (app webApp) GetGroups(ctx context.Context, input *struct {
 	TotalCount int `header:"X-Total-Count" doc:"total number of groups matching the filters, ignoring pagination"`
 	Body       []restmodels.Group
 }, error) {
+	if err := requireDevicesView(ctx); err != nil {
+		return nil, err
+	}
 	filters, err := restmodels.ParseQueryIntoFilters(input.Filters)
 	if err != nil {
 		return nil, err
@@ -315,6 +401,9 @@ func (app webApp) SearchGroups(ctx context.Context, input *struct {
 }) (*struct {
 	Body []restmodels.GroupSearchResult
 }, error) {
+	if err := requireDevicesView(ctx); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(input.Query) == "" {
 		return nil, huma.Error400BadRequest("q must not be empty")
 	}
@@ -332,6 +421,9 @@ func (app webApp) GetGroup(ctx context.Context, input *struct {
 }) (*struct {
 	Body restmodels.Group
 }, error) {
+	if err := requireDevicesView(ctx); err != nil {
+		return nil, err
+	}
 	// Create a filter for the groupId and use the GetGroups method
 	filter := []restmodels.Filter{
 		{
