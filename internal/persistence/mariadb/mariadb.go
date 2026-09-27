@@ -273,7 +273,11 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 	query += " ORDER BY " + orderBy
 	limitClause, limitArgs := paginationClause(pagination)
 	query += limitClause
-	var retDevices []restmodels.Device
+	// Declared as [] rather than a nil var: the Huma handler's Body field is
+	// typed []restmodels.Device, which Huma documents as a non-nullable
+	// OpenAPI array - a nil slice here would encode to JSON `null` instead
+	// of `[]` and violate that spec on a zero-row result.
+	retDevices := []restmodels.Device{}
 	rows, err := persistence.db.Query(query, append(append([]any{}, variables...), limitArgs...)...)
 	if err != nil {
 		return nil, 0, err
@@ -661,7 +665,11 @@ func getGroupsTx(ctx context.Context, filters []libquery.Filter, sorts []libquer
 	query += " ORDER BY " + orderBy
 	limitClause, limitArgs := paginationClause(pagination)
 	query += limitClause
-	var groups []restmodels.Group
+	// Declared as [] rather than a nil var: the Huma handler's Body field is
+	// typed []restmodels.Group, which Huma documents as a non-nullable
+	// OpenAPI array - a nil slice here would encode to JSON `null` instead
+	// of `[]` and violate that spec on a zero-row result.
+	groups := []restmodels.Group{}
 	rows, err := tx.QueryContext(ctx, query, append(append([]any{}, variables...), limitArgs...)...)
 	if err != nil {
 		return nil, 0, err
