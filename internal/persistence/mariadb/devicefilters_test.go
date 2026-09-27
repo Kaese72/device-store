@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/Kaese72/device-store/ingestmodels"
-	"github.com/Kaese72/device-store/restmodels"
+	"github.com/Kaese72/huemie-lib/query"
 )
 
 // TestGetDevicesNameFilter exercises the "name" device filter added for the
@@ -68,9 +68,9 @@ func TestGetDevicesNameFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			devices, total, err := persistence.GetDevices(ctx, []restmodels.Filter{
-				{Key: "name", Operator: tt.operator, Value: tt.value},
-			}, restmodels.Pagination{})
+			devices, total, err := persistence.GetDevices(ctx, []query.Filter{
+				{Field: "name", Operator: tt.operator, Value: tt.value},
+			}, nil, query.Pagination{})
 			if err != nil {
 				t.Fatalf("GetDevices returned an error: %v", err)
 			}

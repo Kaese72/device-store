@@ -197,31 +197,31 @@ func TestEqualRest(t *testing.T) {
 	}
 }
 
-func TestInClause(t *testing.T) {
+func TestIntegerInOperator(t *testing.T) {
 	tests := []struct {
 		name         string
 		value        string
 		expectClause string
-		expectValues []string
+		expectValues []any
 		expectError  bool
 	}{
 		{
 			name:         "single value",
 			value:        "1",
 			expectClause: "id IN (?)",
-			expectValues: []string{"1"},
+			expectValues: []any{"1"},
 		},
 		{
 			name:         "multiple values",
 			value:        "1,2,3",
 			expectClause: "id IN (?,?,?)",
-			expectValues: []string{"1", "2", "3"},
+			expectValues: []any{"1", "2", "3"},
 		},
 		{
 			name:         "whitespace around values",
 			value:        " 1 , 2 ",
 			expectClause: "id IN (?,?)",
-			expectValues: []string{"1", "2"},
+			expectValues: []any{"1", "2"},
 		},
 		{
 			name:        "non-integer value",
@@ -235,9 +235,10 @@ func TestInClause(t *testing.T) {
 		},
 	}
 
+	in := integerInOperator("id")["in"]
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			clause, values, err := inClause("id", tt.value)
+			clause, values, err := in(tt.value)
 			if tt.expectError {
 				if err == nil {
 					t.Fatalf("expected error, got none")

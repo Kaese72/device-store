@@ -6,13 +6,15 @@ import (
 	"github.com/Kaese72/device-store/ingestmodels"
 	"github.com/Kaese72/device-store/internal/persistence/intermediaries"
 	"github.com/Kaese72/device-store/restmodels"
+	"github.com/Kaese72/huemie-lib/query"
 )
 
 type RestPersistenceDB interface {
 	// Device Control
-	// GetDevices returns the page of devices matching filters, along with the total
-	// number of devices matching filters (ignoring pagination).
-	GetDevices(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Device, int, error)
+	// GetDevices returns the page of devices matching filters and ordered by
+	// sorts (or the implementation's default order if sorts is empty), along
+	// with the total number of devices matching filters (ignoring pagination).
+	GetDevices(ctx context.Context, filters []query.Filter, sorts []query.Sort, pagination query.Pagination) ([]restmodels.Device, int, error)
 	DeleteDevice(ctx context.Context, storeIdentifier int) error
 	// UpdateDeviceName sets the human-readable name of a device and returns the updated device.
 	UpdateDeviceName(ctx context.Context, storeIdentifier int, name string) (restmodels.Device, error)
@@ -22,20 +24,21 @@ type RestPersistenceDB interface {
 	// under each of the three possible types.
 	GetAttributeStatistics(ctx context.Context, names []string) ([]restmodels.AttributeStatistic, error)
 	// Audits
-	GetAttributeAudits(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.AttributeAudit, int, error)
+	GetAttributeAudits(ctx context.Context, filters []query.Filter, pagination query.Pagination) ([]restmodels.AttributeAudit, int, error)
 	WriteCapabilityTriggerAudit(ctx context.Context, deviceId int, capabilityName string, success bool, errorMessage *string, arguments string) error
-	GetCapabilityTriggerAudits(ctx context.Context, deviceId int, pagination restmodels.Pagination) ([]restmodels.CapabilityTriggerAudit, int, error)
+	GetCapabilityTriggerAudits(ctx context.Context, deviceId int, pagination query.Pagination) ([]restmodels.CapabilityTriggerAudit, int, error)
 	//// Groups
-	// GetGroups returns the page of groups matching filters, along with the total
-	// number of groups matching filters (ignoring pagination).
-	GetGroups(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Group, int, error)
+	// GetGroups returns the page of groups matching filters and ordered by
+	// sorts (or the implementation's default order if sorts is empty), along
+	// with the total number of groups matching filters (ignoring pagination).
+	GetGroups(ctx context.Context, filters []query.Filter, sorts []query.Sort, pagination query.Pagination) ([]restmodels.Group, int, error)
 	// SearchGroupsByName performs a fuzzy search for groups by name, returning
 	// up to limit results ordered from best to worst match.
 	SearchGroupsByName(ctx context.Context, query string, limit int) ([]restmodels.GroupSearchResult, error)
 	DeleteGroup(ctx context.Context, storeIdentifier int) error
 	GetGroupCapabilityForActivation(ctx context.Context, storeIdentifier int, capabilityName string) (intermediaries.GroupCapabilityIntermediaryActivation, error)
 	WriteGroupCapabilityTriggerAudit(ctx context.Context, groupId int, capabilityName string, success bool, errorMessage *string, arguments string) error
-	GetGroupCapabilityTriggerAudits(ctx context.Context, groupId int, pagination restmodels.Pagination) ([]restmodels.GroupCapabilityTriggerAudit, int, error)
+	GetGroupCapabilityTriggerAudits(ctx context.Context, groupId int, pagination query.Pagination) ([]restmodels.GroupCapabilityTriggerAudit, int, error)
 }
 
 type IngestPersistenceDB interface {

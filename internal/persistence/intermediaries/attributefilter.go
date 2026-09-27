@@ -5,16 +5,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Kaese72/device-store/restmodels"
+	"github.com/Kaese72/huemie-lib/query"
 	"github.com/danielgtaylor/huma/v2"
 )
 
 const attributeFilterKeyPrefix = "attribute."
-
-// attributeApproxEpsilon mirrors the tolerance used elsewhere when comparing
-// attribute values for equality (see dbAttribute.EqualRest), since attribute
-// values are floating point and prone to rounding error.
-const attributeApproxEpsilon = 0.001
 
 type attributeOperator struct {
 	column     string // the deviceAttributes column to compare against
@@ -26,7 +21,12 @@ type attributeOperator struct {
 // attributeOperators defines the type-prefixed operators available when
 // filtering on device attributes. The prefix determines which of the three
 // typed columns (boolean, numeric, text) is compared against, since an
-// attribute's type isn't known from its name alone.
+// attribute's type isn't known from its name alone. This is device-store's
+// own schema knowledge, unlike the generic column filters in mariadb.go
+// which are built from huemie-lib/query's reusable operator builders - an
+// attribute filter instead needs to turn into an EXISTS subquery keyed on
+// both the attribute's name and its typed value column, which those
+// builders aren't shaped for.
 var attributeOperators = map[string]attributeOperator{
 	"bool-eq":       {column: "booleanValue", comparison: "="},
 	"numeric-eq":    {column: "numericValue", comparison: "="},
@@ -37,23 +37,18 @@ var attributeOperators = map[string]attributeOperator{
 	"text-contains": {column: "textValue", contains: true},
 }
 
-// LikeEscaper escapes the LIKE wildcard characters '%' and '_' (and the
-// escape character itself) so a user-supplied substring is matched
-// literally rather than as a pattern.
-var LikeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-
-// IsAttributeFilterKey reports whether a filter key targets a device
+// IsAttributeFilterKey reports whether a filter field targets a device
 // attribute, i.e. is of the form "attribute.<name>".
-func IsAttributeFilterKey(key string) bool {
-	return strings.HasPrefix(key, attributeFilterKeyPrefix)
+func IsAttributeFilterKey(field string) bool {
+	return strings.HasPrefix(field, attributeFilterKeyPrefix)
 }
 
-// SplitAttributeFilters separates filters targeting device attributes (keys
-// of the form "attribute.<name>") from all other filters, so the two groups
-// can be translated to SQL separately.
-func SplitAttributeFilters(filters []restmodels.Filter) (attributeFilters, otherFilters []restmodels.Filter) {
+// SplitAttributeFilters separates filters targeting device attributes
+// (fields of the form "attribute.<name>") from all other filters, so the
+// two groups can be translated to SQL separately.
+func SplitAttributeFilters(filters []query.Filter) (attributeFilters, otherFilters []query.Filter) {
 	for _, filter := range filters {
-		if IsAttributeFilterKey(filter.Key) {
+		if IsAttributeFilterKey(filter.Field) {
 			attributeFilters = append(attributeFilters, filter)
 		} else {
 			otherFilters = append(otherFilters, filter)
@@ -67,13 +62,13 @@ func SplitAttributeFilters(filters []restmodels.Filter) (attributeFilters, other
 // the given devices-table id column (e.g. "devices.id"). A device with no
 // matching attribute row, or with the attribute stored under a different
 // type than the operator implies, does not match.
-func TranslateAttributeFiltersToQueryFragments(filters []restmodels.Filter, deviceIdColumn string) ([]string, []any, error) {
+func TranslateAttributeFiltersToQueryFragments(filters []query.Filter, deviceIdColumn string) ([]string, []any, error) {
 	var fragments []string
 	var values []any
 	for _, filter := range filters {
-		name := strings.TrimPrefix(filter.Key, attributeFilterKeyPrefix)
+		name := strings.TrimPrefix(filter.Field, attributeFilterKeyPrefix)
 		if name == "" {
-			return nil, nil, huma.Error400BadRequest(fmt.Sprintf("attribute filter key %q is missing an attribute name", filter.Key))
+			return nil, nil, huma.Error400BadRequest(fmt.Sprintf("attribute filter field %q is missing an attribute name", filter.Field))
 		}
 		op, ok := attributeOperators[filter.Operator]
 		if !ok {
@@ -84,7 +79,7 @@ func TranslateAttributeFiltersToQueryFragments(filters []restmodels.Filter, devi
 		switch op.column {
 		case "booleanValue":
 			if filter.Value != "true" && filter.Value != "false" {
-				return nil, nil, huma.Error400BadRequest(fmt.Sprintf("attribute filter value %q for %q must be \"true\" or \"false\"", filter.Value, filter.Key))
+				return nil, nil, huma.Error400BadRequest(fmt.Sprintf("attribute filter value %q for %q must be \"true\" or \"false\"", filter.Value, filter.Field))
 			}
 			comparisonValue = "0"
 			if filter.Value == "true" {
@@ -93,7 +88,7 @@ func TranslateAttributeFiltersToQueryFragments(filters []restmodels.Filter, devi
 		case "numericValue":
 			asFloat, err := strconv.ParseFloat(filter.Value, 64)
 			if err != nil {
-				return nil, nil, huma.Error400BadRequest(fmt.Sprintf("attribute filter value %q for %q must be numeric", filter.Value, filter.Key))
+				return nil, nil, huma.Error400BadRequest(fmt.Sprintf("attribute filter value %q for %q must be numeric", filter.Value, filter.Field))
 			}
 			comparisonValue = asFloat
 		default: // textValue
@@ -105,11 +100,11 @@ func TranslateAttributeFiltersToQueryFragments(filters []restmodels.Filter, devi
 				"EXISTS (SELECT 1 FROM deviceAttributes WHERE deviceAttributes.deviceId = %s AND deviceAttributes.name = ? AND ABS(deviceAttributes.%s - ?) < ?)",
 				deviceIdColumn, op.column,
 			))
-			values = append(values, name, comparisonValue, attributeApproxEpsilon)
+			values = append(values, name, comparisonValue, query.NumericApproxEpsilon)
 			continue
 		}
 		if op.contains {
-			pattern := "%" + LikeEscaper.Replace(comparisonValue.(string)) + "%"
+			pattern := "%" + query.LikeEscaper.Replace(comparisonValue.(string)) + "%"
 			fragments = append(fragments, fmt.Sprintf(
 				"EXISTS (SELECT 1 FROM deviceAttributes WHERE deviceAttributes.deviceId = %s AND deviceAttributes.name = ? AND LOWER(deviceAttributes.%s) LIKE LOWER(?) ESCAPE '\\\\')",
 				deviceIdColumn, op.column,

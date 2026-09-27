@@ -17,6 +17,10 @@ import (
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence/intermediaries"
 	"github.com/Kaese72/device-store/restmodels"
+	// aliased: this file uses a local "query" variable for the SQL string
+	// being built in nearly every function, which would otherwise shadow
+	// the package.
+	libquery "github.com/Kaese72/huemie-lib/query"
 	"github.com/danielgtaylor/huma/v2"
 	"go.elastic.co/apm/module/apmsql"
 )
@@ -36,50 +40,41 @@ func NewMariadbPersistence(conf config.DatabaseConfig) (mariadbPersistence, erro
 	}, nil
 }
 
-// deviceFilters defines what filters are available for the devices model
-var deviceFilters = map[string]map[string]func(string) (string, []string, error){
-	"bridge-identifier": {
-		"eq": func(value string) (string, []string, error) {
-			return "bridgeIdentifier = ?", []string{value}, nil
-		},
-	},
-	"id": {
-		"eq": func(value string) (string, []string, error) {
-			if regexp.MustCompile(`^\d+$`).MatchString(value) {
-				return "id = ?", []string{value}, nil
+// deviceIdEqualsOperator validates that the value is a plain integer before
+// building an "id = ?" fragment, since the devices.id column expects one
+// (query.EqualsOperator doesn't validate the value's shape at all).
+func deviceIdEqualsOperator(column string) map[string]libquery.OperatorFunc {
+	return map[string]libquery.OperatorFunc{
+		"eq": func(value string) (string, []any, error) {
+			if !regexp.MustCompile(`^\d+$`).MatchString(value) {
+				return "", nil, huma.Error400BadRequest(fmt.Sprintf("%s filter must be an integer value", column))
 			}
-			return "", nil, huma.Error400BadRequest("id filter must be an integer value")
+			return column + " = ?", []any{value}, nil
 		},
-		"in": func(value string) (string, []string, error) {
-			return inClause("id", value)
-		},
-	},
-	"name": {
-		"text-eq": func(value string) (string, []string, error) {
-			return "name = ?", []string{value}, nil
-		},
-		"text-contains": func(value string) (string, []string, error) {
-			pattern := "%" + intermediaries.LikeEscaper.Replace(value) + "%"
-			return "LOWER(name) LIKE LOWER(?) ESCAPE '\\\\'", []string{pattern}, nil
-		},
-	},
+	}
 }
 
-// inClause builds a "column IN (?,?,...)" fragment from a comma-separated
-// list of integer values, e.g. "1,2,3". Whitespace around each value is
-// ignored; an empty list or any non-integer value is a 400 error.
-func inClause(column string, value string) (string, []string, error) {
-	rawValues := strings.Split(value, ",")
-	values := make([]string, 0, len(rawValues))
-	for _, rawValue := range rawValues {
-		trimmed := strings.TrimSpace(rawValue)
-		if !regexp.MustCompile(`^\d+$`).MatchString(trimmed) {
-			return "", nil, huma.Error400BadRequest(fmt.Sprintf("%s filter must be a comma-separated list of integer values", column))
-		}
-		values = append(values, trimmed)
+// integerInOperator wraps query.InOperator's "in" operator with an
+// integer-shape check on every comma-separated value.
+func integerInOperator(column string) map[string]libquery.OperatorFunc {
+	in := libquery.InOperator(column)["in"]
+	return map[string]libquery.OperatorFunc{
+		"in": func(value string) (string, []any, error) {
+			for _, rawValue := range strings.Split(value, ",") {
+				if !regexp.MustCompile(`^\d+$`).MatchString(strings.TrimSpace(rawValue)) {
+					return "", nil, huma.Error400BadRequest(fmt.Sprintf("%s filter must be a comma-separated list of integer values", column))
+				}
+			}
+			return in(value)
+		},
 	}
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(values)), ",")
-	return fmt.Sprintf("%s IN (%s)", column, placeholders), values, nil
+}
+
+// deviceFilters defines what filters are available for the devices model
+var deviceFilters = map[string]libquery.FieldSpec{
+	"bridge-identifier": libquery.Merge(libquery.EqualsOperator("bridgeIdentifier")),
+	"id":                libquery.Merge(deviceIdEqualsOperator("id"), integerInOperator("id")),
+	"name":              libquery.Merge(libquery.TextOperators("name")),
 }
 
 // validateTimestamp validates that the valis is on the format 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM:SS'
@@ -102,29 +97,20 @@ func validateTimestamp(value string) error {
 }
 
 // deviceAttributeAuditFilters defines what filters are available for the deviceAttributeAudit model
-var deviceAttributeAuditFilters = map[string]map[string]func(string) (string, []string, error){
-	"deviceId": {
-		"eq": func(value string) (string, []string, error) {
-			if regexp.MustCompile(`^\d+$`).MatchString(value) {
-				return "deviceId = ?", []string{value}, nil
-			}
-			return "", nil, huma.Error400BadRequest("deviceId filter must be an integer value")
-		},
-	},
-	"name": {
-		"eq": func(value string) (string, []string, error) {
-			return "name = ?", []string{value}, nil
-		},
-	},
+var deviceAttributeAuditFilters = map[string]libquery.FieldSpec{
+	"deviceId": libquery.Merge(deviceIdEqualsOperator("deviceId")),
+	"name":     libquery.Merge(libquery.EqualsOperator("name")),
 	"timestamp": {
-		"eq": func(value string) (string, []string, error) {
-			return "timestamp = ?", []string{value}, validateTimestamp(value)
-		},
-		"gt": func(value string) (string, []string, error) {
-			return "timestamp > ?", []string{value}, validateTimestamp(value)
-		},
-		"lt": func(value string) (string, []string, error) {
-			return "timestamp < ?", []string{value}, validateTimestamp(value)
+		Operators: map[string]libquery.OperatorFunc{
+			"eq": func(value string) (string, []any, error) {
+				return "timestamp = ?", []any{value}, validateTimestamp(value)
+			},
+			"gt": func(value string) (string, []any, error) {
+				return "timestamp > ?", []any{value}, validateTimestamp(value)
+			},
+			"lt": func(value string) (string, []any, error) {
+				return "timestamp < ?", []any{value}, validateTimestamp(value)
+			},
 		},
 	},
 	// We intentionally leave out old and new values for now
@@ -219,7 +205,7 @@ type queryAble interface {
 // paginationClause returns the SQL "LIMIT ? OFFSET ?" fragment and its arguments
 // for the given pagination. A zero Limit means unbounded, in which case no
 // clause is applied.
-func paginationClause(pagination restmodels.Pagination) (string, []any) {
+func paginationClause(pagination libquery.Pagination) (string, []any) {
 	if pagination.Limit <= 0 {
 		return "", nil
 	}
@@ -245,7 +231,10 @@ func countRows(ctx context.Context, tx queryAble, table string, whereClause stri
 	return total, nil
 }
 
-func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Device, int, error) {
+// deviceSortFields are the fields "sort" may reference for GetDevices.
+var deviceSortFields = map[string]string{"id": "id", "name": "name"}
+
+func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []libquery.Filter, sorts []libquery.Sort, pagination libquery.Pagination) ([]restmodels.Device, int, error) {
 	fields := []string{
 		"id",
 		"name",
@@ -259,7 +248,7 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM devices`
 	attributeFilters, otherFilters := intermediaries.SplitAttributeFilters(filters)
-	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(otherFilters, deviceFilters)
+	queryFragments, variables, err := libquery.Translate(otherFilters, deviceFilters)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -277,7 +266,11 @@ func (persistence mariadbPersistence) GetDevices(ctx context.Context, filters []
 	if err != nil {
 		return nil, 0, err
 	}
-	query += " ORDER BY id ASC"
+	orderBy, err := libquery.BuildOrderBy(sorts, deviceSortFields, "id ASC")
+	if err != nil {
+		return nil, 0, err
+	}
+	query += " ORDER BY " + orderBy
 	limitClause, limitArgs := paginationClause(pagination)
 	query += limitClause
 	var retDevices []restmodels.Device
@@ -395,9 +388,9 @@ func (persistence mariadbPersistence) UpdateDeviceName(ctx context.Context, stor
 	if err != nil {
 		return restmodels.Device{}, err
 	}
-	devices, _, err := persistence.GetDevices(ctx, []restmodels.Filter{
-		{Key: "id", Operator: "eq", Value: fmt.Sprintf("%d", storeIdentifier)},
-	}, restmodels.Pagination{})
+	devices, _, err := persistence.GetDevices(ctx, []libquery.Filter{
+		{Field: "id", Operator: "eq", Value: fmt.Sprintf("%d", storeIdentifier)},
+	}, nil, libquery.Pagination{})
 	if err != nil {
 		return restmodels.Device{}, err
 	}
@@ -408,7 +401,7 @@ func (persistence mariadbPersistence) UpdateDeviceName(ctx context.Context, stor
 }
 
 // GetAttributeAudits
-func (persistence mariadbPersistence) GetAttributeAudits(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.AttributeAudit, int, error) {
+func (persistence mariadbPersistence) GetAttributeAudits(ctx context.Context, filters []libquery.Filter, pagination libquery.Pagination) ([]restmodels.AttributeAudit, int, error) {
 	fields := []string{
 		"id",
 		"deviceId",
@@ -422,7 +415,7 @@ func (persistence mariadbPersistence) GetAttributeAudits(ctx context.Context, fi
 		"newTextValue",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM deviceAttributeAudit`
-	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, deviceAttributeAuditFilters)
+	queryFragments, variables, err := libquery.Translate(filters, deviceAttributeAuditFilters)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -622,29 +615,23 @@ func (persistence mariadbPersistence) GetDeviceCapabilityForActivation(ctx conte
 	return capability, nil
 }
 
-var groupFilters = map[string]map[string]func(string) (string, []string, error){
-	"bridge-identifier": {
-		"eq": func(value string) (string, []string, error) {
-			return "bridgeIdentifier = ?", []string{value}, nil
-		},
-	},
-	"id": {
-		"eq": func(value string) (string, []string, error) {
-			return "id = ?", []string{value}, nil
-		},
-	},
-	"adapter-id": {
-		"eq": func(value string) (string, []string, error) {
-			return "adapterId = ?", []string{value}, nil
-		},
-	},
+// groupFilters intentionally only offers "eq" on "id" (unlike deviceFilters,
+// which also offers "in") - this preserves today's behavior pending a
+// decision on whether the asymmetry is intentional or an oversight.
+var groupFilters = map[string]libquery.FieldSpec{
+	"bridge-identifier": libquery.Merge(libquery.EqualsOperator("bridgeIdentifier")),
+	"id":                libquery.Merge(deviceIdEqualsOperator("id")),
+	"adapter-id":        libquery.Merge(libquery.EqualsOperator("adapterId")),
 }
 
-func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination) ([]restmodels.Group, int, error) {
-	return getGroupsTx(ctx, filters, pagination, persistence.db)
+// groupSortFields are the fields "sort" may reference for GetGroups.
+var groupSortFields = map[string]string{"id": "id", "name": "name"}
+
+func (persistence mariadbPersistence) GetGroups(ctx context.Context, filters []libquery.Filter, sorts []libquery.Sort, pagination libquery.Pagination) ([]restmodels.Group, int, error) {
+	return getGroupsTx(ctx, filters, sorts, pagination, persistence.db)
 }
 
-func getGroupsTx(ctx context.Context, filters []restmodels.Filter, pagination restmodels.Pagination, tx queryAble) ([]restmodels.Group, int, error) {
+func getGroupsTx(ctx context.Context, filters []libquery.Filter, sorts []libquery.Sort, pagination libquery.Pagination, tx queryAble) ([]restmodels.Group, int, error) {
 	fields := []string{
 		"id",
 		"bridgeIdentifier",
@@ -655,7 +642,7 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, pagination re
 		"(SELECT COALESCE(JSON_ARRAYAGG(deviceId), JSON_ARRAY()) FROM groupDevices WHERE groupId = groups.id) as deviceIds",
 	}
 	query := `SELECT ` + strings.Join(fields, ",") + ` FROM groups`
-	queryFragments, variables, err := intermediaries.TranslateFiltersToQueryFragments(filters, groupFilters)
+	queryFragments, variables, err := libquery.Translate(filters, groupFilters)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -667,7 +654,11 @@ func getGroupsTx(ctx context.Context, filters []restmodels.Filter, pagination re
 	if err != nil {
 		return nil, 0, err
 	}
-	query += " ORDER BY id ASC"
+	orderBy, err := libquery.BuildOrderBy(sorts, groupSortFields, "id ASC")
+	if err != nil {
+		return nil, 0, err
+	}
+	query += " ORDER BY " + orderBy
 	limitClause, limitArgs := paginationClause(pagination)
 	query += limitClause
 	var groups []restmodels.Group
@@ -817,18 +808,18 @@ func (persistence mariadbPersistence) PostGroup(ctx context.Context, group inges
 }
 
 func postGroupTx(ctx context.Context, group ingestmodels.IngestGroup, tx queryAble) error {
-	foundGroups, _, err := getGroupsTx(ctx, []restmodels.Filter{
+	foundGroups, _, err := getGroupsTx(ctx, []libquery.Filter{
 		{
-			Key:      "bridge-identifier",
+			Field:    "bridge-identifier",
 			Operator: "eq",
 			Value:    group.BridgeIdentifier,
 		},
 		{
-			Key:      "adapter-id",
+			Field:    "adapter-id",
 			Operator: "eq",
 			Value:    fmt.Sprintf("%d", group.AdapterId),
 		},
-	}, restmodels.Pagination{}, tx)
+	}, nil, libquery.Pagination{}, tx)
 	if err != nil {
 		return err
 	}
@@ -893,7 +884,7 @@ func (persistence mariadbPersistence) WriteCapabilityTriggerAudit(ctx context.Co
 	return err
 }
 
-func (persistence mariadbPersistence) GetCapabilityTriggerAudits(ctx context.Context, deviceId int, pagination restmodels.Pagination) ([]restmodels.CapabilityTriggerAudit, int, error) {
+func (persistence mariadbPersistence) GetCapabilityTriggerAudits(ctx context.Context, deviceId int, pagination libquery.Pagination) ([]restmodels.CapabilityTriggerAudit, int, error) {
 	if pagination.Limit <= 0 {
 		pagination.Limit = 50
 	}
@@ -929,7 +920,7 @@ func (persistence mariadbPersistence) WriteGroupCapabilityTriggerAudit(ctx conte
 	return err
 }
 
-func (persistence mariadbPersistence) GetGroupCapabilityTriggerAudits(ctx context.Context, groupId int, pagination restmodels.Pagination) ([]restmodels.GroupCapabilityTriggerAudit, int, error) {
+func (persistence mariadbPersistence) GetGroupCapabilityTriggerAudits(ctx context.Context, groupId int, pagination libquery.Pagination) ([]restmodels.GroupCapabilityTriggerAudit, int, error) {
 	if pagination.Limit <= 0 {
 		pagination.Limit = 50
 	}

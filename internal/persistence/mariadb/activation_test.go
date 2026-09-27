@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/Kaese72/device-store/ingestmodels"
-	"github.com/Kaese72/device-store/restmodels"
+	"github.com/Kaese72/huemie-lib/query"
 )
 
 // TestGetDeviceCapabilityForActivation seeds a device whose name equals the
@@ -68,7 +68,7 @@ func TestGetGroupCapabilityForActivation(t *testing.T) {
 		t.Fatalf("failed to seed group: %v", err)
 	}
 
-	groups, _, err := persistence.GetGroups(ctx, nil, restmodels.Pagination{})
+	groups, _, err := persistence.GetGroups(ctx, nil, nil, query.Pagination{})
 	if err != nil {
 		t.Fatalf("failed to look up seeded group: %v", err)
 	}
