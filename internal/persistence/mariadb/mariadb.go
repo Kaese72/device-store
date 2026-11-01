@@ -626,6 +626,7 @@ var groupFilters = map[string]libquery.FieldSpec{
 	"bridge-identifier": libquery.Merge(libquery.EqualsOperator("bridgeIdentifier")),
 	"id":                libquery.Merge(deviceIdEqualsOperator("id")),
 	"adapter-id":        libquery.Merge(libquery.EqualsOperator("adapterId")),
+	"name":              libquery.Merge(libquery.TextOperators("name")),
 }
 
 // groupSortFields are the fields "sort" may reference for GetGroups.
