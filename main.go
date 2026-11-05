@@ -70,7 +70,13 @@ func main() {
 
 	// Public router (device-store + device-ingest)
 	publicRouter := mux.NewRouter()
-	publicRouter.Use(usertoken.Middleware(pubKey, "/device-ingest/", "/device-store/openapi", "/device-store/docs"))
+	// API tokens are accepted (looked up in the authentication service) only
+	// when its internal URL is configured; use tokens always are.
+	authOptions := []usertoken.MiddlewareOption{usertoken.SkipPrefixes("/device-ingest/", "/device-store/openapi", "/device-store/docs")}
+	if config.Loaded.Auth.InternalURL != "" {
+		authOptions = append(authOptions, usertoken.AcceptAPITokens(usertoken.NewIntrospector(config.Loaded.Auth.InternalURL, config.Loaded.Auth.ServiceAccountTokenPath)))
+	}
+	publicRouter.Use(usertoken.NewMiddleware(pubKey, authOptions...))
 	publicRouter.Use(ingestwebapp.DeviceIngestJWTMiddleware(config.Loaded.DeviceIngest.JWTSecret))
 	publicHumaConfig := huma.DefaultConfig("device-store", "1.0.0")
 	publicHumaConfig.OpenAPIPath = "/device-store/openapi"
