@@ -4,37 +4,25 @@ import (
 	"context"
 
 	liblogger "github.com/Kaese72/huemie-lib/logging"
-	"go.elastic.co/apm/v2"
+	"github.com/Kaese72/huemie-lib/telemetry"
 )
 
-func extractApmData(ctx context.Context) map[string]interface{} {
-	// Completely stolen from documentation, https://www.elastic.co/guide/en/apm/agent/go/current/log-correlation-ids.html
-	// Some slight modifications to create correct types
-	labels := map[string]interface{}{}
-	tx := apm.TransactionFromContext(ctx)
-	if tx != nil {
-		traceContext := tx.TraceContext()
-		labels["trace.id"] = traceContext.Trace.String()
-		labels["transaction.id"] = traceContext.Span.String()
-		if span := apm.SpanFromContext(ctx); span != nil {
-			labels["span.id"] = span.TraceContext().Span.String()
-		}
-	}
-	return labels
+func traceFields(ctx context.Context) map[string]interface{} {
+	return telemetry.LogFields(ctx)
 }
 
 func Info(msg string, ctx context.Context, data ...map[string]interface{}) {
-	liblogger.Info(msg, append(data, extractApmData(ctx))...)
+	liblogger.Info(msg, append(data, traceFields(ctx))...)
 }
 
 func Error(msg string, ctx context.Context, data ...map[string]interface{}) {
-	liblogger.Error(msg, append(data, extractApmData(ctx))...)
+	liblogger.Error(msg, append(data, traceFields(ctx))...)
 }
 
 func ErrorErr(err error, ctx context.Context, data ...map[string]interface{}) {
-	liblogger.ErrError(err, append(data, extractApmData(ctx))...)
+	liblogger.ErrError(err, append(data, traceFields(ctx))...)
 }
 
 func Fatal(msg string, ctx context.Context, data ...map[string]interface{}) {
-	liblogger.Fatal(msg, append(data, extractApmData(ctx))...)
+	liblogger.Fatal(msg, append(data, traceFields(ctx))...)
 }

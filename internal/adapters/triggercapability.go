@@ -12,11 +12,10 @@ import (
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/restmodels"
 	"github.com/danielgtaylor/huma/v2"
-	"go.elastic.co/apm/module/apmhttp/v2"
 	"golang.org/x/net/context/ctxhttp"
 )
 
-var tracingClient = apmhttp.WrapClient(http.DefaultClient)
+var tracingClient = http.DefaultClient
 
 func TriggerDeviceCapability(ctx context.Context, adapterAddress string, bridgeDeviceIdentifier string, capabilityID string, capArg restmodels.DeviceCapabilityArgs) error {
 	jsonEncoded, err := json.Marshal(capArg)

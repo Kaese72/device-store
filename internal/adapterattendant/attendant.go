@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Kaese72/device-store/internal/config"
-	"go.elastic.co/apm/module/apmhttp/v2"
 	"golang.org/x/net/context/ctxhttp"
 )
 
@@ -29,7 +28,7 @@ type AdapterTriggerClient struct {
 	cache map[int]AdapterAddressCache
 }
 
-var tracingClient = apmhttp.WrapClient(http.DefaultClient)
+var tracingClient = http.DefaultClient
 
 func (client AdapterTriggerClient) GetAdapterAddress(ctx context.Context, adapterId int) (string, error) {
 	if cached, ok := client.cache[adapterId]; ok && cached.LastUpdate.After(time.Now().Add(-1*time.Hour)) {

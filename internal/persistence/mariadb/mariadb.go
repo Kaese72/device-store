@@ -21,8 +21,8 @@ import (
 	// being built in nearly every function, which would otherwise shadow
 	// the package.
 	libquery "github.com/Kaese72/huemie-lib/query"
+	"github.com/Kaese72/huemie-lib/telemetry"
 	"github.com/danielgtaylor/huma/v2"
-	"go.elastic.co/apm/module/apmsql"
 )
 
 type mariadbPersistence struct {
@@ -30,7 +30,7 @@ type mariadbPersistence struct {
 }
 
 func NewMariadbPersistence(conf config.DatabaseConfig) (mariadbPersistence, error) {
-	db, err := apmsql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&loc=UTC", conf.User, conf.Password, conf.Host, conf.Port, conf.Database))
+	db, err := telemetry.OpenDB("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true&loc=UTC", conf.User, conf.Password, conf.Host, conf.Port, conf.Database))
 	if err != nil {
 		logging.Fatal(err.Error(), context.Background())
 		return mariadbPersistence{}, err

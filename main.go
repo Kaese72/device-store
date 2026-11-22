@@ -15,15 +15,19 @@ import (
 	"github.com/Kaese72/device-store/internal/logging"
 	"github.com/Kaese72/device-store/internal/persistence/mariadb"
 	"github.com/Kaese72/device-store/internal/restwebapp"
+	"github.com/Kaese72/huemie-lib/telemetry"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humamux"
 	"github.com/danielgtaylor/huma/v2/sse"
 	"github.com/gorilla/mux"
 
-	_ "go.elastic.co/apm/module/apmsql/mysql"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
+	shutdownTelemetry := telemetry.Setup(context.Background(), "device-store")
+	defer shutdownTelemetry(context.Background())
+
 	if err := config.Loaded.Validate(); err != nil {
 		logging.Error(err.Error(), context.TODO())
 		os.Exit(1)
@@ -121,13 +125,13 @@ func main() {
 	huma.Post(internalAPI, "/device-store-internal/v0/groups/{storeGroupIdentifier:[0-9]+}/capabilities/{capabilityID}", restWebapp.TriggerGroupCapability)
 
 	go func() {
-		if err := http.ListenAndServe(fmt.Sprintf(":%d", config.Loaded.InternalPort), internalRouter); err != nil {
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", config.Loaded.InternalPort), telemetry.Router(internalRouter)); err != nil {
 			logging.Error(err.Error(), context.TODO())
 			os.Exit(1)
 		}
 	}()
 
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", config.Loaded.PublicPort), publicRouter); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", config.Loaded.PublicPort), telemetry.Router(publicRouter)); err != nil {
 		logging.Error(err.Error(), context.TODO())
 	}
 }

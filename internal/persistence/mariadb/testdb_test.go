@@ -17,7 +17,7 @@ import (
 	// NewMariadbPersistence opens the "mysql" driver name registered by this
 	// package's init(); production only pulls it in via main.go, so tests
 	// need the same blank import to register the driver themselves.
-	_ "go.elastic.co/apm/module/apmsql/mysql"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // setupTestDB starts a throwaway MariaDB container, applies every migration
